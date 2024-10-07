@@ -187,6 +187,7 @@ class DiskModule(L.LightningModule):
         N_decisions           = ((N_per_scene - 1) * N_per_scene) // 2
 
         stats = np.zeros((N_scenes, N_decisions), dtype=object)
+        losses = []
 
         # we detach features from the computation graph, so that when we call
         # .backward(), the computation will not flow down to the Unet. We
@@ -200,15 +201,15 @@ class DiskModule(L.LightningModule):
         for i_scene in range(N_scenes):
             i_decision = 0
             scene_features = detached_features[i_scene]
-            scene_images   = images[i_scene]
+            scene_images = images[i_scene]
 
             # (N_per_scene choose 2) image pairs
             for i_image1 in range(N_per_scene):
-                image1    = scene_images[i_image1]
+                image1 = scene_images[i_image1]
                 features1 = scene_features[i_image1]
 
-                for i_image2 in range(i_image1+1, N_per_scene):
-                    image2    = scene_images[i_image2]
+                for i_image2 in range(i_image1 + 1, N_per_scene):
+                    image2 = scene_images[i_image2]
                     features2 = scene_features[i_image2]
 
                     # establish the match distribution and calculate the
@@ -219,6 +220,7 @@ class DiskModule(L.LightningModule):
                     self.manual_backward(loss)
 
                     stats[i_scene, i_decision] = stats_
+                    losses.append(loss)
                     i_decision += 1
 
         # here we "reattach" `detached_features` to the original `features`.
@@ -226,7 +228,7 @@ class DiskModule(L.LightningModule):
         # two equal length lists where for each grad-enabled leaf in `leaves`
         # we have a corresponding gradient tensor in `grads`
         leaves = []
-        grads  = []
+        grads = []
         for feat, detached_feat in zip(features.flat, detached_features.flat):
             leaves.extend(feat.grad_tensors())
             grads.extend([t.grad for t in detached_feat.grad_tensors()])
@@ -234,7 +236,7 @@ class DiskModule(L.LightningModule):
         # finally propagate the gradients down to the network
         torch.autograd.backward(leaves, grads)
 
-        return stats
+        return losses, stats
 
     def validation_step(self, batch, batch_idx):
         bitmaps, images = batch
@@ -247,6 +249,16 @@ class DiskModule(L.LightningModule):
         matches = self.valtime_matcher.match_pairwise(features)
         d_stats = self.disc_quality_metric(images, matches)
         p_stats = self.pose_quality_metric(images, matches)
+        # tp fp torchmetric
+        for stats in d_stats.flat:
+            for key, value in stats.items():
+                self.log(f"val/{key}", value, on_epoch=True, rank_zero_only=True)
+        for stats in p_stats.flat:
+            if stats["success"] == 1:
+                del stats["success"]
+                for key, value in stats.items():
+                    self.log(f"val/{key}", value, on_epoch=True, rank_zero_only=True)
+
 
         # for d_stat in d_stats.flat:
         #     # those are metrics similar to the ones used at training time:
