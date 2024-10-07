@@ -80,12 +80,13 @@ class ConsistentMatchDistribution(MatchDistribution):
         return self._features_2
 
 class ConsistentMatcher(torch.nn.Module):
-    def __init__(self, inverse_T=1.):
+    def __init__(self):
         super(ConsistentMatcher, self).__init__()
-        self.inverse_T = nn.Parameter(torch.tensor(inverse_T, dtype=torch.float32))
+        # self.inverse_T = nn.Parameter(torch.tensor(inverse_T, dtype=torch.float32))
 
-    def extra_repr(self):
-        return f'inverse_T={self.inverse_T.item()}'
+    # def extra_repr(self):
+    #     return f'inverse_T={self.inverse_T.item()}'
 
-    def match_pair(self, features_1: Features, features_2: Features):
-        return ConsistentMatchDistribution(features_1, features_2, self.inverse_T)
+    def match_pair(self, features_1: Features, features_2: Features, epoch: int):
+        inverse_T = 15 + 35 * min(1., 0.05 * epoch)
+        return ConsistentMatchDistribution(features_1, features_2, inverse_T)

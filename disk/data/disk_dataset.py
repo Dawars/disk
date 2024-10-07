@@ -183,6 +183,7 @@ class DISKDataset(LimitedConcatDataset):
             images.append(np.array(tuple_))
             bitmaps.append(torch.stack([image.bitmap for image in tuple_]))
 
+        # return torch.stack(bitmaps), np.stack(images)
         return PinnableTupleBatch(torch.stack(bitmaps), np.stack(images))
 
 class PinnableTupleBatch(typing.NamedTuple):

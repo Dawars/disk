@@ -1,7 +1,7 @@
-import torch, typing
+import torch, typing, cv2, sys
 import numpy as np
 import multiprocessing as mp
-import multiprocessing.dummy as mpd
+from torch_dimcheck import dimchecked
 from typing import Dict
 
 from disk import MatchedPairs, Image, NpArray, EstimationFailedError
@@ -74,33 +74,27 @@ class Job(typing.NamedTuple):
     def execute(job):
         return job().to_dict()
 
+class DummyPool:
+    '''
+    acts like multiprocessing.Pool and can be used to debug stuff
+    '''
+    def map(self, f, args):
+        return [f(arg) for arg in args]
+
 class PoseQuality:
     def __init__(self, ransac=Ransac(), dummy_pool=False, n_proc=6):
         self.ransac = ransac
-        self.pool = None
-        self.dummy_pool = dummy_pool
-        self.n_proc = n_proc
-    
-    def __enter__(self):
-        if self.dummy_pool:
-            self.pool = mpd.Pool(processes=self.n_proc)
+        if dummy_pool:
+            self.pool = DummyPool()
         else:
-            self.pool = mp.Pool(processes=self.n_proc)
-        
-        return self
-    
-    def __exit__(self, *args):
-        self.pool.close()
-        self.pool = None
+            self.pool = mp.Pool(processes=n_proc)
 
     def __call__(
         self,
         images: NpArray[Image],
         decisions: NpArray[MatchedPairs]
     )-> NpArray[Dict[str, float]]:
-        if self.pool is None:
-            raise RuntimeError('self.pool is not initialized. PoseQuality needs to be used inside a `with` block.')
-        
+
         N_scenes, N_per_scene = images.shape
 
         assert decisions.shape[0] == N_scenes
