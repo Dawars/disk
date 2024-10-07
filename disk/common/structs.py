@@ -96,14 +96,16 @@ class MatchDistribution(abc.ABC):
 
 class MatchedPairs:
     @dimchecked
-    def __init__(self, kps1: ['N', 2], kps2: ['M', 2], matches: [2, 'K']):
+    def __init__(self, kps1: ['N', 2], kps2: ['M', 2], matches: [3, 'K']):  #, score: [1, 'K']):
         self.kps1    = kps1
         self.kps2    = kps2
         self.matches = matches
+        # self.score = score
 
     def to(self, *args, **kwargs):
         return MatchedPairs(
             self.kps1.to(*args, **kwargs),
             self.kps2.to(*args, **kwargs),
             self.matches.to(*args, **kwargs),
+            # self.score.to(*args, **kwargs),
         )
