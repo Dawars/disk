@@ -21,8 +21,8 @@ import json
 
 from disk.data.datamodule import DataModuleTraining
 from disk.model.disk_module import DiskModule
-from opt import get_opts
 from disk.utils.training_utils import create_exp_name
+from opt import get_opts
 
 def train_model(args):
     pl.seed_everything(42)
@@ -30,9 +30,10 @@ def train_model(args):
     print('Start training of ' + exp_name)
     model = DiskModule(args)
 
-    jobId = os.getenv("SLURM_JOB_ID")
+    jobId = os.getenv("SLURM_JOB_ID", "-1")
     taskId = os.getenv('SLURM_ARRAY_JOB_ID')
-    job_id = int(taskId) if taskId else int(jobId)
+    job_id = int(taskId) if taskId else int(jobId )
+    valid_slurm_job = job_id > -1
     ckpt_dir: Path = args.save_dir / exp_name / str(job_id)
     ckpt_dir.mkdir(exist_ok=True, parents=True)
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
@@ -52,21 +53,22 @@ def train_model(args):
 
     (ckpt_dir / "config.json").write_text(json.dumps(config_dict, indent=4, ensure_ascii=False))
 
-    logger = WandbLogger(project="disk", name=exp_name, id=str(job_id), resume="allow", config=config_dict)
+    logger = WandbLogger(project="disk", name=exp_name, id=str(job_id) if valid_slurm_job else None,
+                         resume="allow" if valid_slurm_job else "never", config=config_dict)
 
     trainer = pl.Trainer(devices=args.num_gpus,
-                         # log_every_n_steps=cfg.TRAINING.LOG_INTERVAL,
-                         # val_check_interval=cfg.TRAINING.VAL_INTERVAL,
-                         # limit_val_batches=cfg.TRAINING.VAL_BATCHES,
+                         log_every_n_steps=50, #cfg.TRAINING.LOG_INTERVAL,
+                         val_check_interval=0.5, #cfg.TRAINING.VAL_INTERVAL,
+                         limit_val_batches=100,#cfg.TRAINING.VAL_BATCHES,
                          max_epochs=args.num_epochs,
                          logger=logger,
                          callbacks=[checkpoint_callback,
                                     # BatchSizeFinder()
                                     lr_monitoring_callback],
-                         num_sanity_val_steps=0,
+                         num_sanity_val_steps=1,
                          # gradient_clip_val=0.,
                          plugins=SLURMEnvironment(requeue_signal=signal.SIGHUP, auto_requeue=False),
-                         enable_progress_bar=True,
+                         enable_progress_bar=not valid_slurm_job,
                          )
 
     datamodule_end = DataModuleTraining(args, args.batch_size)

@@ -61,8 +61,8 @@ class DiscreteMetric(torch.nn.Module):
     def _loss_one_pair(self, pairs: MatchedPairs, img1: Image, img2: Image):
         n_kps   = pairs.kps1.shape[0] + pairs.kps2.shape[0]
 
-        kps1 = pairs.kps1[pairs.matches[0]]
-        kps2 = pairs.kps2[pairs.matches[1]]
+        kps1 = pairs.kps1[pairs.matches[0].long()]
+        kps2 = pairs.kps2[pairs.matches[1].long()]
 
         n_pairs = pairs.matches.shape[1]
 

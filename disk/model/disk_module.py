@@ -4,18 +4,21 @@ import numpy as np
 import torch
 from torch import optim, nn, utils, Tensor
 import lightning as L
+from lightning.pytorch.loggers import WandbLogger
 
 from disk import DISK, MatchDistribution, Features, NpArray, Image
-from disk.loss import Reinforce, PoseQuality, DiscreteMetric
+from disk.loss import PoseQuality, DiscreteMetric
 from disk.loss.rewards import EpipolarReward, DepthReward
 from disk.model import ConsistentMatcher, CycleMatcher
+from disk.utils.training_utils import log_image_matches
+
+from mickey.lib.models.MicKey.modules.utils.training_utils import vis_inliers
 
 
 # define the LightningModule
 class DiskModule(L.LightningModule):
     def __init__(self, args):
         super().__init__()
-        self.automatic_optimization = False
         # create the feature extractor and descriptor. It does not handle matching,
         # this will come later
         self.disk = DISK(window=8, desc_dim=args.desc_dim)
@@ -34,9 +37,28 @@ class DiskModule(L.LightningModule):
         else:
             raise ValueError(f'Unknown reward mode `{args.reward}`')
 
+        # this is a module which is used to perform matching. It has a single
+        # parameter called θ_M in the paper and `inverse_T` here. It could be
+        # learned but I instead anneal it between 15 and 50
+        # inverse_T = 15 + 35 * min(1., 0.05 * e)
         self.matcher = ConsistentMatcher()  # todo add dustbin
         self.matcher.requires_grad_(False)
 
+        # Logger parameters
+        self.counter_batch = 0
+        self.log_store_ims = True
+        self.log_max_ims = 5
+        self.log_im_counter_train = 0
+        self.log_im_counter_val = 0
+        self.log_interval = 50  # cfg.TRAINING.LOG_INTERVAL
+
+        # Lightning configurations
+        self.automatic_optimization = False # This property activates manual optimization.
+        self.multi_gpu = self.args.num_gpus > 1
+        self.validation_step_outputs_d_stats = []
+        self.validation_step_outputs_p_stats = []
+        torch.autograd.set_detect_anomaly(True)
+        self.example_input_array = [1, 3, args.height, args.width]
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=1e-4)
@@ -66,11 +88,6 @@ class DiskModule(L.LightningModule):
         )
         self.lm_kp = -0.001 * ramp
 
-        # this is a module which is used to perform matching. It has a single
-        # parameter called θ_M in the paper and `inverse_T` here. It could be
-        # learned but I instead anneal it between 15 and 50
-        # inverse_T = 15 + 35 * min(1., 0.05 * e)
-
     def forward(self, *args: Any, **kwargs: Any) -> Any:
         pass
 
@@ -96,8 +113,7 @@ class DiskModule(L.LightningModule):
         # (the algorithm is very memory hungry because we create huge feature
         # distance matrices). This is described in the paper in section 4.
         # in "optimization"
-        stats = self.accumulate_grad(images, features)
-        del bitmaps, images, features
+        losses, stats = self.accumulate_grad(images, features)
 
         # Make an optimization step. args.substep is there to allow making bigger
         # "batches" by just accumulating gradient across several of those.
@@ -112,11 +128,74 @@ class DiskModule(L.LightningModule):
         #     self.log(sample)  # todo aggregate
 
         # first epoch can be cut short after args.warmup optimization steps
-        # if e == 0 and i == args.warmup:
+        # if self.current_epoch == 0 and self.global_step == args.warmup:
         #     break
 
-        # self.log("train_loss", loss)
-        # return loss
+        loss = torch.mean(torch.tensor(losses))
+        with torch.no_grad():
+            self.logging_step(batch, loss, features)
+        del bitmaps, images, features
+
+        return loss
+
+
+    def logging_step(self, batch, avg_loss, features):
+        self.log("train/loss", avg_loss.detach())
+
+        if self.counter_batch % self.log_interval == 0:
+            self.counter_batch = 0
+
+            batch_id = 0
+
+            bitmaps, images = batch
+            # bitmaps = bitmaps[batch_id]
+            # images = images[batch_id]
+
+            # only plotting matches between 0-1 images out of triplet
+            im_batch = {
+                "image0": bitmaps[:, 0],
+                "image1": bitmaps[:, 1],
+            }
+            features1 = features[batch_id, 0]
+            features2 = features[batch_id, 1]
+            matches = self.valtime_matcher.match_features(features1.desc, features2.desc)
+
+            # Nx5 - kp coords and prob of inlier matches (x1y1, x2y2, prob)
+            match_prob = matches[2] # todo ransac
+            inliers_list_ours = torch.cat([features1.kp[matches[0].long()],
+                                           features2.kp[matches[1].long()],
+                                           match_prob[..., None]], dim=-1)
+
+            im_inliers = vis_inliers([inliers_list_ours], im_batch, batch_i=batch_id)
+            #
+            im_matches, sc_map0, sc_map1, depth_map0, depth_map1 = log_image_matches(self.matcher,
+                                                                                     batch,
+                                                                                     features,
+                                                                                     train_depth=False,
+                                                                                     batch_i=batch_id,
+                                                                                     sc_temp=1  # todo check
+                                                                                    )
+            logger: WandbLogger = self.logger
+
+            logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.log_im_counter_train)
+            # logger.log_image(key='training_matching/best_matches_desc', images=[im_matches],
+            #                  step=self.log_im_counter_train)
+            logger.log_image(key='training_scores/map0', images=[sc_map0], step=self.log_im_counter_train)
+            logger.log_image(key='training_scores/map1', images=[sc_map1], step=self.log_im_counter_train)
+            # logger.log_image(key='training_depth/map0', images=[depth_map0[0]], step=self.log_im_counter_train)
+            # logger.log_image(key='training_depth/map1', images=[depth_map1[0]], step=self.log_im_counter_train)
+            # if training_step_ok:
+            #     try:
+            #         im_rewards, rew_kp0, rew_kp1 = debug_reward_matches_log(batch, probs_grad, batch_i=batch_id)
+            #         logger.log_image(key='training_rewards/pair0', images=[im_rewards], step=self.log_im_counter_train)
+            #     except ValueError:
+            #         print('[WARNING]: Failed to log reward image. Selected image is not in topK image pairs. ')
+
+            self.log_im_counter_train += 1
+
+        torch.cuda.empty_cache()
+        self.counter_batch += 1
+
 
     def _loss_for_pair(self, match_dist: MatchDistribution, img1: Image, img2: Image):
         elementwise_rewards = self.reward_fn(
@@ -216,12 +295,16 @@ class DiskModule(L.LightningModule):
                     # gradient estimator
                     match_dist = self.matcher.match_pair(features1, features2, self.current_epoch)
                     loss, stats_ = self._loss_for_pair(match_dist, image1, image2)
+                    # todo subtract baseline
                     # this .backward() will accumulate in `detached_features`
                     self.manual_backward(loss)
 
                     stats[i_scene, i_decision] = stats_
                     losses.append(loss)
                     i_decision += 1
+
+        # add gradient clipping after backward to avoid gradient exploding
+        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=5)
 
         # here we "reattach" `detached_features` to the original `features`.
         # `torch.autograd.backward(leaves, grads)` API requires that we have
