@@ -66,7 +66,7 @@ class DiskModule(L.LightningModule):
 
     def on_train_batch_start(self, batch: Any, batch_idx: int):
 
-        e = self.global_step
+        e = self.global_step / self.args.chunk_size
         # this is an important part: if we start with a random initialization
         # it's pretty bad at first. Therefore if we set penalties for bad matches,
         # the algorithm will quickly converge to the local optimum of not doing
@@ -74,9 +74,9 @@ class DiskModule(L.LightningModule):
         # Therefore in the first couple of epochs I start with very low (0)
         # penalty and then gradually increase it. The very first epoch can be
         # short, and is controllable by the --warmup switch (default 250)
-        if e == 0:
+        if e < 1:
             ramp = 0.
-        elif e == 1:
+        elif e < 2:
             ramp = 0.1
         else:
             ramp = min(1., 0.1 + 0.2 * e)
