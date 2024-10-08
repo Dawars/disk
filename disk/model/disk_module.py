@@ -66,7 +66,7 @@ class DiskModule(L.LightningModule):
 
     def on_train_batch_start(self, batch: Any, batch_idx: int):
 
-        e = self.current_epoch
+        e = self.global_step
         # this is an important part: if we start with a random initialization
         # it's pretty bad at first. Therefore if we set penalties for bad matches,
         # the algorithm will quickly converge to the local optimum of not doing
@@ -80,7 +80,7 @@ class DiskModule(L.LightningModule):
             ramp = 0.1
         else:
             ramp = min(1., 0.1 + 0.2 * e)
-
+        self.log("train/ramp", ramp, rank_zero_only=True)
         self.reward_fn = self.reward_class(
             lm_tp=1.,
             lm_fp=-0.25 * ramp,
