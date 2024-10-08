@@ -7,7 +7,7 @@ from disk.geom import distance_matrix
 
 class CycleMatcher:
     @dimchecked
-    def match_features(self, feat_1: ['N', 'F'], feat_2: ['M', 'F']) -> [3, 'K']:
+    def match_features(self, feat_1: ['N', 'F'], feat_2: ['M', 'F']) -> [2, 'K']:
         dist_m = distance_matrix(feat_1, feat_2)
 
         if dist_m.shape[0] == 0 or dist_m.shape[1] == 0:
@@ -36,11 +36,9 @@ class CycleMatcher:
         # We use nonzero to turn `n_amin[mask]` into an index array and return
         feature_id1 = torch.nonzero(mask, as_tuple=False)[:, 0]
         features_id2 = n_amin[mask]
-        score = dist_m[feature_id1, features_id2]
         return torch.stack([
             feature_id1,
-            features_id2,
-            score
+            features_id2
         ], dim=0)
 
     def match_pairwise(

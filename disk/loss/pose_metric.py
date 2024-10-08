@@ -49,8 +49,8 @@ class Job(typing.NamedTuple):
     def __call__(self):
         m = self.matches
 
-        left  = m.kps1[m.matches[0].long()]
-        right = m.kps2[m.matches[1].long()]
+        left  = m.kps1[m.matches[0]]
+        right = m.kps2[m.matches[1]]
 
         try:
             pose_estimate, mask = self.ransac(left, right, self.K1, self.K2)
