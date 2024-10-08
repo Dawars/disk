@@ -74,7 +74,7 @@ class DiskModule(L.LightningModule):
         # Therefore in the first couple of epochs I start with very low (0)
         # penalty and then gradually increase it. The very first epoch can be
         # short, and is controllable by the --warmup switch (default 250)
-        if self.global_step < self.warmup:
+        if self.global_step < self.args.warmup:
             ramp = 0.
         elif e < 1:
             ramp = 0.1
