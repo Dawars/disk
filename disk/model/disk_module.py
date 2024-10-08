@@ -127,9 +127,6 @@ class DiskModule(L.LightningModule):
         # for sample in stats.flat:
         #     self.log(sample)  # todo aggregate
 
-        # first epoch can be cut short after args.warmup optimization steps
-        # if self.current_epoch == 0 and self.global_step == args.warmup:
-        #     break
 
         loss = torch.mean(torch.tensor(losses))
         with torch.no_grad():
@@ -156,19 +153,14 @@ class DiskModule(L.LightningModule):
                 "image0": bitmaps[:, 0],
                 "image1": bitmaps[:, 1],
             }
-            features1 = features[batch_id, 0]
-            features2 = features[batch_id, 1]
-            matches = self.valtime_matcher.match_features(features1.desc, features2.desc)
 
-            # Nx5 - kp coords and prob of inlier matches (x1y1, x2y2, prob)
-            match_prob = matches[2] # todo ransac
-            inliers_list_ours = torch.cat([features1.kp[matches[0].long()],
-                                           features2.kp[matches[1].long()],
-                                           match_prob[..., None]], dim=-1)
+            # im_inliers = vis_inliers([inliers_list_ours], im_batch, batch_i=batch_id)
+            features1: Features = features[batch_id, 0]
+            features2: Features = features[batch_id, 1]
 
-            im_inliers = vis_inliers([inliers_list_ours], im_batch, batch_i=batch_id)
-            #
-            im_matches, sc_map0, sc_map1, depth_map0, depth_map1 = log_image_matches(self.matcher,
+            match_dist = self.matcher.match_pair(features1, features2, self.current_epoch)
+
+            im_matches, sc_map0, sc_map1, depth_map0, depth_map1 = log_image_matches(match_dist,
                                                                                      batch,
                                                                                      features,
                                                                                      train_depth=False,
@@ -177,9 +169,9 @@ class DiskModule(L.LightningModule):
                                                                                     )
             logger: WandbLogger = self.logger
 
-            logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.log_im_counter_train)
-            # logger.log_image(key='training_matching/best_matches_desc', images=[im_matches],
-            #                  step=self.log_im_counter_train)
+            # logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.log_im_counter_train)
+            logger.log_image(key='training_matching/best_matches_desc', images=[im_matches],
+                             step=self.log_im_counter_train)
             logger.log_image(key='training_scores/map0', images=[sc_map0], step=self.log_im_counter_train)
             logger.log_image(key='training_scores/map1', images=[sc_map1], step=self.log_im_counter_train)
             # logger.log_image(key='training_depth/map0', images=[depth_map0[0]], step=self.log_im_counter_train)

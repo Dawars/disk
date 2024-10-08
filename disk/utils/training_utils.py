@@ -2,20 +2,17 @@ import cv2
 import numpy as np
 import torch
 
-from disk import Features
+from disk import Features, MatchDistribution
 from mickey.lib.models.MicKey.modules.utils.training_utils import generate_kp_im
 
 
-def log_image_matches(matcher, batch, features, train_depth=False, batch_i=0, num_vis_matches=30, sc_temp=0.3, norm_color=True):
+def log_image_matches(match_dist: MatchDistribution, batch, features, train_depth=False, batch_i=0, num_vis_matches=30, sc_temp=0.3, norm_color=True):
     bitmaps, imges = batch
     # Plot to kps
     features1: Features = features[batch_i, 0]
     features2: Features = features[batch_i, 1]
     sc_map0 = generate_kp_im(torch.exp(features1.kp_logp[None]), bitmaps[batch_i, 0], features1.kp.t(), temperature=sc_temp)
     sc_map1 = generate_kp_im(torch.exp(features2.kp_logp[None]), bitmaps[batch_i, 1], features2.kp.t(), temperature=sc_temp)
-
-    return None, sc_map0, sc_map1, None, None
-    # return im_matches, sc_map0, sc_map1, depth_map0, depth_map1
 
     if train_depth:
         border_sz = 6
@@ -40,8 +37,8 @@ def log_image_matches(matcher, batch, features, train_depth=False, batch_i=0, nu
         depth_map1 = None
 
     # Prepare the matching image:
-    image0 = (255 * batch['image0'][batch_i].permute(1, 2, 0)).detach().cpu().numpy()
-    image1 = (255 * batch['image1'][batch_i].permute(1, 2, 0)).detach().cpu().numpy()
+    image0 = (255 * imges[batch_i][0].hwc).detach().cpu().numpy()
+    image1 = (255 * imges[batch_i][0].hwc).detach().cpu().numpy()
 
     shape_im = image0.shape
 
@@ -50,20 +47,7 @@ def log_image_matches(matcher, batch, features, train_depth=False, batch_i=0, nu
     tmp_im[:shape_im[0], shape_im[1] + 50:shape_im[1] + 50 + shape_im[1], :] = image1
 
     # Check the matches:
-    matches_list = matcher.get_matches_list(batch['final_scores'][batch_i].detach().unsqueeze(0))
-
-    if len(matches_list) == 0:
-        im_matches = torch.from_numpy(tmp_im).permute(2, 0, 1) / 255.
-        return im_matches, sc_map0, sc_map1, depth_map0, depth_map1
-
-    corr0 = batch['kps0'][batch_i, :2, matches_list[:, 0]].T.detach()
-    corr1 = batch['kps1'][batch_i, :2, matches_list[:, 1]].T.detach()
-
-    non_border_matches0 = check_out_border_kpt(corr0, shape_im, borders=50)
-    non_border_matches1 = check_out_border_kpt(corr1, shape_im, borders=50)
-
-    non_border_matches = non_border_matches0 * non_border_matches1
-    matches_list = matches_list[non_border_matches]
+    matches_list = match_dist.sample()
 
     if len(matches_list) == 0:
         im_matches = torch.from_numpy(tmp_im).permute(2, 0, 1) / 255.
@@ -71,16 +55,17 @@ def log_image_matches(matcher, batch, features, train_depth=False, batch_i=0, nu
 
     # Sort by matching score
     color = np.asarray([0, 255, 0], float)
-    sc_matching = batch['scores'][batch_i, matches_list[:, 0], matches_list[:, 1]].detach()
-    matches_list = matches_list[torch.argsort(sc_matching, descending=True)]
-    max_sc = max(sc_matching).detach().cpu().numpy()
-    min_sc = min(sc_matching).detach().cpu().numpy()
+    scores = match_dist.dense_p()[matches_list[0], matches_list[1]]
+    matches_list = matches_list[:, torch.argsort(scores, descending=True)]
+    scores, _ = torch.sort(scores, descending=True)
+    max_sc = scores.max().detach().cpu().numpy()
+    min_sc = scores.min().detach().cpu().numpy()
 
     for i_m in range(min(num_vis_matches, len(matches_list))):
         match = matches_list[i_m]
-        pt_ref = batch['kps0'][batch_i, :, match[0]].detach().cpu().numpy()
-        pt_dst = batch['kps1'][batch_i, :, match[1]].detach().cpu().numpy()
-        sc_matching = batch['scores'][batch_i, match[0], match[1]].detach().cpu().numpy()
+        pt_ref = features1.kp[i_m].detach().cpu().numpy()
+        pt_dst = features2.kp[i_m].detach().cpu().numpy()
+        sc_matching = scores[i_m].detach().cpu().numpy()
 
         # Normalise score for better visualisation
         sc_matching = (sc_matching - min_sc) / (max_sc - min_sc + 1e-16)
