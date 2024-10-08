@@ -1,9 +1,6 @@
-import argparse
 import os
 import signal
 from pathlib import Path
-
-from skimage.color.rgb_colors import khaki
 
 # do this before importing numpy! (doing it right up here in case numpy is dependency of e.g. json)
 os.environ["MKL_NUM_THREADS"] = "1"  # noqa: E402
@@ -44,6 +41,14 @@ def train_model(args):
         monitor='val/precision',
         mode='max'
     )
+    epochend_callback = pl.callbacks.ModelCheckpoint(
+        dirpath=ckpt_dir,
+        filename='{epoch}-last',
+        save_last=True,
+        save_top_k=1,
+        every_n_epochs=1,
+        save_on_train_epoch_end=True
+    )
     lr_monitoring_callback = pl.callbacks.LearningRateMonitor(logging_interval='step')
 
     config_dict = vars(args)
@@ -62,7 +67,7 @@ def train_model(args):
                          limit_val_batches=100,#cfg.TRAINING.VAL_BATCHES,
                          max_epochs=args.num_epochs,
                          logger=logger,
-                         callbacks=[checkpoint_callback,
+                         callbacks=[checkpoint_callback, epochend_callback,
                                     # BatchSizeFinder()
                                     lr_monitoring_callback],
                          num_sanity_val_steps=1,
