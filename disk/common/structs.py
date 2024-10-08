@@ -96,7 +96,7 @@ class MatchDistribution(abc.ABC):
 
 class MatchedPairs:
     @dimchecked
-    def __init__(self, kps1: ['N', 2], kps2: ['M', 2], matches: [3, 'K']):
+    def __init__(self, kps1: ['N', 2], kps2: ['M', 2], matches: [2, 'K']):
         self.kps1    = kps1
         self.kps2    = kps2
         self.matches = matches

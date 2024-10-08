@@ -61,7 +61,7 @@ def log_image_matches(match_dist: MatchDistribution, batch, features, train_dept
     max_sc = scores.max().detach().cpu().numpy()
     min_sc = scores.min().detach().cpu().numpy()
 
-    for i_m in range(min(num_vis_matches, len(matches_list))):
+    for i_m in range(min(num_vis_matches, matches_list.shape[1])):
         pt_ref = features1.kp[i_m].detach().cpu().numpy()
         pt_dst = features2.kp[i_m].detach().cpu().numpy()
         sc_matching = scores[i_m].detach().cpu().numpy()
