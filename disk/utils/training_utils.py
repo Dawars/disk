@@ -38,7 +38,7 @@ def log_image_matches(match_dist: MatchDistribution, batch, features, train_dept
 
     # Prepare the matching image:
     image0 = (255 * imges[batch_i][0].hwc).detach().cpu().numpy()
-    image1 = (255 * imges[batch_i][0].hwc).detach().cpu().numpy()
+    image1 = (255 * imges[batch_i][1].hwc).detach().cpu().numpy()
 
     shape_im = image0.shape
 
