@@ -2,7 +2,7 @@ import torch, typing, cv2, sys
 import numpy as np
 import multiprocessing as mp
 from torch_dimcheck import dimchecked
-from typing import Dict
+from typing import Dict, Optional
 
 from disk import MatchedPairs, Image, NpArray, EstimationFailedError
 from disk.loss.ransac import Ransac
@@ -11,15 +11,17 @@ from disk.geom import Pose, PoseError
 CPU = torch.device('cpu')
 
 class PoseQualityResult:
-    def __init__(self, error: PoseError, n_inliers: int, success: bool = True):
+    def __init__(self, error: PoseError, n_inliers: int, inlier_mask: Optional[NpArray], success: bool = True):
         self.error     = error
         self.n_inliers = n_inliers
+        self.inlier_mask = inlier_mask
         self.success   = success
 
     def to_dict(self):
         return {
             **self.error.to_dict(),
             'n_inliers': self.n_inliers,
+            'inlier_mask': self.inlier_mask,
             'success'  : int(self.success),
         }
 
@@ -35,6 +37,7 @@ FAILED_RESULT = PoseQualityResult(
         Δ_T=179.95,
     ),
     n_inliers=0,
+    inlier_mask=torch.zeros([0], dtype=bool),
     success=False
 )
 
@@ -65,6 +68,7 @@ class Job(typing.NamedTuple):
         return PoseQualityResult(
             error=error,
             n_inliers=n_inliers,
+            inlier_mask=mask,
             success=True,
         )
 

@@ -6,7 +6,7 @@ from torch import optim, nn, utils, Tensor
 import lightning as L
 from lightning.pytorch.loggers import WandbLogger
 
-from disk import DISK, MatchDistribution, Features, NpArray, Image
+from disk import DISK, MatchDistribution, Features, NpArray, Image, MatchedPairs
 from disk.loss import PoseQuality, DiscreteMetric
 from disk.loss.rewards import EpipolarReward, DepthReward
 from disk.model import ConsistentMatcher, CycleMatcher
@@ -153,11 +153,16 @@ class DiskModule(L.LightningModule):
                 "image0": bitmaps[:, 0],
                 "image1": bitmaps[:, 1],
             }
+            matches = self.valtime_matcher.match_pairwise(features)
+            relpose = self.pose_quality_metric(images, matches)
+            matched_pairs: MatchedPairs = matches[batch_id, 0]
+            inlier_match_indices = relpose[batch_id, 0]["inlier_mask"]
+            inliers_list_ours = torch.cat([matched_pairs.kps1[matched_pairs.matches[0, inlier_match_indices]],
+                                           matched_pairs.kps2[matched_pairs.matches[1, inlier_match_indices]]], dim=-1)
+            im_inliers = vis_inliers([inliers_list_ours], im_batch, batch_i=batch_id, norm_color=False)
 
-            # im_inliers = vis_inliers([inliers_list_ours], im_batch, batch_i=batch_id)
             features1: Features = features[batch_id, 0]
             features2: Features = features[batch_id, 1]
-
             match_dist = self.matcher.match_pair(features1, features2, self.current_epoch)
 
             im_matches, sc_map0, sc_map1, depth_map0, depth_map1 = log_image_matches(match_dist,
@@ -169,7 +174,7 @@ class DiskModule(L.LightningModule):
                                                                                     )
             logger: WandbLogger = self.logger
 
-            # logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.log_im_counter_train)
+            logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.log_im_counter_train)
             logger.log_image(key='training_matching/best_matches_desc', images=[im_matches],
                              step=self.log_im_counter_train)
             logger.log_image(key='training_scores/map0', images=[sc_map0], step=self.log_im_counter_train)
@@ -332,6 +337,8 @@ class DiskModule(L.LightningModule):
             if stats["success"] == 1:
                 del stats["success"]
                 for key, value in stats.items():
+                    if key == "inlier_mask":
+                        continue
                     self.log(f"val/{key}", value, on_epoch=True, rank_zero_only=True)
 
 
