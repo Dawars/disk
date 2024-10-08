@@ -38,10 +38,10 @@ def train_model(args):
     ckpt_dir.mkdir(exist_ok=True, parents=True)
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=ckpt_dir,
-        filename='{epoch}-best_vcre',
+        filename='{epoch}-best_precision',
         save_top_k=1,
         verbose=True,
-        monitor='val_vcre/auc_vcre',
+        monitor='val/precision',
         mode='max'
     )
     lr_monitoring_callback = pl.callbacks.LearningRateMonitor(logging_interval='step')
