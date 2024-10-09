@@ -40,7 +40,7 @@ def train_model(args):
         filename='{epoch}-best_precision',
         save_top_k=1,
         verbose=True,
-        monitor='val/precision',
+        monitor='val/discrete/precision',
         mode='max'
     )
     epochend_callback = pl.callbacks.ModelCheckpoint(
