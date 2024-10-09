@@ -46,11 +46,7 @@ class DiskModule(L.LightningModule):
         self.matcher.requires_grad_(False)
 
         # Logger parameters
-        self.counter_batch = 0
         self.log_store_ims = True
-        self.log_max_ims = 5
-        self.log_im_counter_train = 0
-        self.log_im_counter_val = 0
         self.log_interval = 50  # cfg.TRAINING.LOG_INTERVAL
 
         # Lightning configurations
@@ -58,7 +54,7 @@ class DiskModule(L.LightningModule):
         self.multi_gpu = self.args.num_gpus > 1
         self.validation_step_outputs_d_stats = []
         self.validation_step_outputs_p_stats = []
-        torch.autograd.set_detect_anomaly(True)
+        # torch.autograd.set_detect_anomaly(True)
         self.example_input_array = [1, 3, args.height, args.width]
 
     def configure_optimizers(self):
@@ -66,7 +62,7 @@ class DiskModule(L.LightningModule):
         return optimizer
 
     def on_train_batch_start(self, batch: Any, batch_idx: int):
-
+        bitmaps, images = batch
         e = self.global_step / self.args.chunk_size
         # this is an important part: if we start with a random initialization
         # it's pretty bad at first. Therefore if we set penalties for bad matches,
@@ -81,7 +77,8 @@ class DiskModule(L.LightningModule):
             ramp = 0.1
         else:
             ramp = min(1., 0.1 + 0.2 * e)
-        self.log("train/ramp", ramp, rank_zero_only=True)
+        if self.global_step % self.log_interval == 0:
+            self.log("train/ramp", ramp, batch_size=len(bitmaps), rank_zero_only=True)
         self.reward_fn = self.reward_class(
             lm_tp=1.,
             lm_fp=-0.25 * ramp,
@@ -89,13 +86,17 @@ class DiskModule(L.LightningModule):
         )
         self.lm_kp = -0.001 * ramp
 
+    def on_train_epoch_start(self):
+        # reset optimizer during epochs just in case
+        optim = self.optimizers()
+        optim.zero_grad()
+
     def forward(self, *args: Any, **kwargs: Any) -> Any:
         pass
 
     def training_step(self, batch, batch_idx):
         bitmaps, images = batch
         # todo add curriculum learning
-
         # some reshaping because the image pairs are shaped like
         # [2, batch_size, rgb, height, width] and DISK accepts them
         # as [2 * batch_size, rgb, height, width]
@@ -120,34 +121,35 @@ class DiskModule(L.LightningModule):
         # "batches" by just accumulating gradient across several of those.
         # Again, this is because the algorithm is so memory hungry it can be
         # an issue to have batches bigger than 1.
-        if self.global_step % self.args.substep == self.args.substep - 1:
+        optimize = (batch_idx + 1) % self.args.substep == 0
+        if optimize:
             optim = self.optimizers()
             optim.step()
             optim.zero_grad()
 
-        # for sample in stats.flat:
-        #     self.log(sample)  # todo aggregate
-
+        aggregated_stats = defaultdict(list)
+        for sample in stats.flat:
+            for key, value in sample.items():
+                aggregated_stats[key].append(value)
+        for key, value in aggregated_stats.items():
+            self.log(f"train/{key}", torch.mean(torch.tensor(value, dtype=torch.float32)), sync_dist=self.multi_gpu)
 
         loss = torch.mean(torch.tensor(losses))
         with torch.no_grad():
-            self.logging_step(batch, loss, features)
+            if optimize:  # don't double log during gradient accumulation
+                self.logging_step(batch, loss, features)
         del bitmaps, images, features
 
         return loss
 
 
     def logging_step(self, batch, avg_loss, features):
-        self.log("train/loss", avg_loss.detach())
+        self.log("train/loss", avg_loss.detach(), batch_size=len(batch[0]), sync_dist=self.multi_gpu, rank_zero_only=True)
 
-        if self.counter_batch % self.log_interval == 0:
-            self.counter_batch = 0
-
+        if self.global_step % self.log_interval == 0 and self.log_store_ims:
             batch_id = 0
 
             bitmaps, images = batch
-            # bitmaps = bitmaps[batch_id]
-            # images = images[batch_id]
 
             # only plotting matches between 0-1 images out of triplet
             im_batch = {
@@ -171,28 +173,24 @@ class DiskModule(L.LightningModule):
                                                                                      features,
                                                                                      train_depth=False,
                                                                                      batch_i=batch_id,
-                                                                                     sc_temp=1  # todo check
+                                                                                     sc_temp=1
                                                                                     )
             logger: WandbLogger = self.logger
 
-            logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.log_im_counter_train)
-            logger.log_image(key='training_matching/best_matches_desc', images=[im_matches],
-                             step=self.log_im_counter_train)
-            logger.log_image(key='training_scores/map0', images=[sc_map0], step=self.log_im_counter_train)
-            logger.log_image(key='training_scores/map1', images=[sc_map1], step=self.log_im_counter_train)
-            # logger.log_image(key='training_depth/map0', images=[depth_map0[0]], step=self.log_im_counter_train)
-            # logger.log_image(key='training_depth/map1', images=[depth_map1[0]], step=self.log_im_counter_train)
+            logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.global_step)
+            logger.log_image(key='training_matching/best_matches_desc', images=[im_matches], step=self.global_step)
+            logger.log_image(key='training_scores/map0', images=[sc_map0], step=self.global_step)
+            logger.log_image(key='training_scores/map1', images=[sc_map1], step=self.global_step)
+            # logger.log_image(key='training_depth/map0', images=[depth_map0[0]], step=self.global_step)
+            # logger.log_image(key='training_depth/map1', images=[depth_map1[0]], step=self.global_step)
             # if training_step_ok:
             #     try:
             #         im_rewards, rew_kp0, rew_kp1 = debug_reward_matches_log(batch, probs_grad, batch_i=batch_id)
-            #         logger.log_image(key='training_rewards/pair0', images=[im_rewards], step=self.log_im_counter_train)
+            #         logger.log_image(key='training_rewards/pair0', images=[im_rewards], step=self.global_step)
             #     except ValueError:
             #         print('[WARNING]: Failed to log reward image. Selected image is not in topK image pairs. ')
 
-            self.log_im_counter_train += 1
-
         torch.cuda.empty_cache()
-        self.counter_batch += 1
 
 
     def _loss_for_pair(self, match_dist: MatchDistribution, img1: Image, img2: Image):
@@ -330,31 +328,27 @@ class DiskModule(L.LightningModule):
         matches = self.valtime_matcher.match_pairwise(features)
         d_stats = self.disc_quality_metric(images, matches)
         p_stats = self.pose_quality_metric(images, matches)
-        # tp fp torchmetric
-        for stats in d_stats.flat:
-            for key, value in stats.items():
-                self.log(f"val/{key}", value, on_epoch=True, rank_zero_only=True)
-        for stats in p_stats.flat:
-            if stats["success"] == 1:
-                del stats["success"]
-                for key, value in stats.items():
-                    if key == "inlier_mask":
-                        continue
-                    self.log(f"val/{key}", value, on_epoch=True, rank_zero_only=True)
 
+        aggregated_stats = defaultdict(list)
+        # those are metrics similar to the ones used at training time:
+        # number of true/false positives, etc. They are called
+        # `discrete` because I compute them after actually performing
+        # mutual nearest neighbor (cycle consistent) matching, rather
+        # than report the expectations, as I do at trianing time
+        for sample in d_stats.flat:
+            for key, value in sample.items():
+                aggregated_stats[f"val/discrete/{key}"].append(value)
+        # those are metrics related to camera pose estimation: error in
+        # camera rotation and translation
+        for sample in p_stats.flat:
+            for key, value in sample.items():
+                if key == "inlier_mask":
+                    continue
+                aggregated_stats[f"val/pose/{key}"].append(value)
 
-        # for d_stat in d_stats.flat:
-        #     # those are metrics similar to the ones used at training time:
-        #     # number of true/false positives, etc. They are called
-        #     # `discrete` because I compute them after actually performing
-        #     # mutual nearest neighbor (cycle consistent) matching, rather
-        #     # than report the expectations, as I do at trianing time
-        #
-        #     logger.add_scalars(d_stat, prefix='test/discrete')
-        # for p_stat in p_stats.flat:
-        #     # those are metrics related to camera pose estimation: error in
-        #     # camera rotation and translation
-        #     logger.add_scalars(p_stat, prefix='test/pose')
+        for key, value in aggregated_stats.items():
+            mean_value = torch.mean(torch.tensor(value, dtype=torch.float32))
+            self.log(key, mean_value, batch_size=len(bitmaps), on_epoch=True, sync_dist=self.multi_gpu, rank_zero_only=False)
 
         del bitmaps, images, features
 
