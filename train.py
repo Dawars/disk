@@ -13,6 +13,7 @@ import lightning.pytorch as pl
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.plugins.environments import SLURMEnvironment
 from lightning.pytorch.callbacks import BatchSizeFinder
+torch.backends.cuda.matmul.allow_tf32 = True  # for gpu >= Ampere and pytorch >= 1.12
 
 import json
 
