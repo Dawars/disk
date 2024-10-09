@@ -23,7 +23,8 @@ from disk.utils.training_utils import create_exp_name
 from opt import get_opts
 
 def train_model(args):
-    pl.seed_everything(42)
+    task_id = os.environ.get("SLURM_PROCID", 0)
+    pl.seed_everything(42 + task_id)
     exp_name = create_exp_name(args.exp_name, args)
     print('Start training of ' + exp_name)
     model = DiskModule(args)
