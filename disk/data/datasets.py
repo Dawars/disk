@@ -1,8 +1,57 @@
 import itertools, os
-from torch.utils.data import DataLoader
+from typing import Iterator, Optional, Sized
+
+import torch
+from torch.utils.data import DataLoader, Sampler
 
 from disk.data import DISKDataset
 
+
+class RandomSampler(Sampler[int]):
+    r"""Samples elements randomly. If without replacement, then sample from a shuffled dataset.
+
+    If with replacement, then user can specify :attr:`num_samples` to draw.
+
+    Args:
+        data_source (Dataset): dataset to sample from
+        replacement (bool): samples are drawn on-demand with replacement if ``True``, default=``False``
+        num_samples (int): number of samples to draw, default=`len(dataset)`.
+        generator (Generator): Generator used in sampling.
+    """
+
+    data_source: Sized
+
+    def __init__(self, data_source: Sized, num_samples: Optional[int] = None, reinit=None, generator=None) -> None:
+        self.data_source = data_source
+        self._num_samples = num_samples
+        self.reinit = reinit
+        self.generator = generator
+        if not isinstance(self.num_samples, int) or self.num_samples <= 0:
+            raise ValueError(f"num_samples should be a positive integer value, but got num_samples={self.num_samples}")
+
+    @property
+    def num_samples(self) -> int:
+        # dataset size might change at runtime
+        if self._num_samples is None:
+            return len(self.data_source)
+        return self._num_samples
+
+    def __iter__(self) -> Iterator[int]:
+        print("reinit")
+        self.reinit(self.data_source)
+        n = len(self.data_source)
+        if self.generator is None:
+            seed = int(torch.empty((), dtype=torch.int64).random_().item())
+            generator = torch.Generator()
+            generator.manual_seed(seed)
+        else:
+            generator = self.generator
+        for _ in range(self.num_samples // n):
+            yield from torch.randperm(n, generator=generator).tolist()
+        yield from torch.randperm(n, generator=generator).tolist()[:self.num_samples % n]
+
+    def __len__(self) -> int:
+        return self.num_samples
 
 def get_datasets(
         root,
@@ -30,9 +79,19 @@ def get_datasets(
         'pin_memory': True,
         'num_workers': 12,
     }
+
+    train_chunk_iter = RandomSampler(
+        train_dataset,
+        num_samples=chunk_size,
+        reinit=lambda dataset: dataset.shuffle(),
+        generator=None,
+    )
     train_dataloader = DataLoader(
-        train_dataset, shuffle=True,
-        batch_size=batch_size, **dataloader_kwargs
+        train_dataset,
+        # shuffle=True,
+        batch_size=batch_size,
+        sampler=train_chunk_iter,
+        **dataloader_kwargs
     )
 
     test_dataset = DISKDataset(
@@ -47,22 +106,7 @@ def get_datasets(
         batch_size=batch_size, **dataloader_kwargs
     )
 
-    if len(train_dataloader) < chunk_size:
-        raise ValueError(f'Your training dataset has {len(train_dataloader)} '
-                         f'items, which is less than your --chunk-size setting '
-                         f'({chunk_size}) therefore no chunks could be '
-                          'created. Please reduce --chunk-size or use a bigger'
-                          ' dataset.')
-
-    train_chunk_iter = itertools.islice(DividedIter(
-        train_dataloader,
-        n_repeats=n_epochs*10,
-        chunk_size=chunk_size,
-        reinit=lambda dataloader: dataloader.dataset.shuffle(),
-    ), n_epochs)
-
-    return train_chunk_iter, test_dataloader
-    # return train_dataloader, test_dataloader
+    return train_dataloader, test_dataloader
 
 
 class DividedIter:
