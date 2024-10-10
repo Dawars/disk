@@ -28,7 +28,7 @@ def get_datasets(
     dataloader_kwargs = {
         'collate_fn': train_dataset.collate_fn,
         'pin_memory': True,
-        'num_workers': 4,
+        'num_workers': 12,
     }
     train_dataloader = DataLoader(
         train_dataset, shuffle=True,
