@@ -37,7 +37,6 @@ class RandomSampler(Sampler[int]):
         return self._num_samples
 
     def __iter__(self) -> Iterator[int]:
-        print("reinit")
         self.reinit(self.data_source)
         n = len(self.data_source)
         if self.generator is None:
