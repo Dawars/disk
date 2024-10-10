@@ -47,22 +47,22 @@ def get_datasets(
         batch_size=batch_size, **dataloader_kwargs
     )
 
-    # if len(train_dataloader) < chunk_size:
-    #     raise ValueError(f'Your training dataset has {len(train_dataloader)} '
-    #                      f'items, which is less than your --chunk-size setting '
-    #                      f'({chunk_size}) therefore no chunks could be '
-    #                       'created. Please reduce --chunk-size or use a bigger'
-    #                       ' dataset.')
-    #
-    # train_chunk_iter = itertools.islice(DividedIter(
-    #     train_dataloader,
-    #     n_repeats=n_epochs*10,
-    #     chunk_size=chunk_size,
-    #     reinit=lambda dataloader: dataloader.dataset.shuffle(),
-    # ), n_epochs)
+    if len(train_dataloader) < chunk_size:
+        raise ValueError(f'Your training dataset has {len(train_dataloader)} '
+                         f'items, which is less than your --chunk-size setting '
+                         f'({chunk_size}) therefore no chunks could be '
+                          'created. Please reduce --chunk-size or use a bigger'
+                          ' dataset.')
 
-    # return train_chunk_iter, test_dataloader
-    return train_dataloader, test_dataloader
+    train_chunk_iter = itertools.islice(DividedIter(
+        train_dataloader,
+        n_repeats=n_epochs*10,
+        chunk_size=chunk_size,
+        reinit=lambda dataloader: dataloader.dataset.shuffle(),
+    ), n_epochs)
+
+    return train_chunk_iter, test_dataloader
+    # return train_dataloader, test_dataloader
 
 
 class DividedIter:
