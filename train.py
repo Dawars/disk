@@ -65,7 +65,7 @@ def train_model(args):
 
     trainer = pl.Trainer(devices=args.num_gpus,
                          log_every_n_steps=50, #cfg.TRAINING.LOG_INTERVAL,
-                         val_check_interval=0.5, #cfg.TRAINING.VAL_INTERVAL,
+                         val_check_interval=5000, #cfg.TRAINING.VAL_INTERVAL,
                          limit_val_batches=100,#cfg.TRAINING.VAL_BATCHES,
                          max_epochs=args.num_epochs,
                          logger=logger,
