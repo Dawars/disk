@@ -15,6 +15,10 @@ def get_opts():
         help='Number of GPUs per node',
     )
     parser.add_argument(
+        '--num-nodes', type=int, default=1,
+        help='Number of node',
+    )
+    parser.add_argument(
         '--exp-name', type=str,
         help='Experiment name prefix',
     )
