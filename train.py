@@ -69,7 +69,7 @@ def train_model(args):
                          val_check_interval=1.0, #cfg.TRAINING.VAL_INTERVAL,
                          limit_val_batches=100,#cfg.TRAINING.VAL_BATCHES,
                          # limit_train_batches=args.chunk_size,
-                         max_epochs=args.num_epochs,
+                         max_steps=300_000,
                          logger=logger,
                          callbacks=[checkpoint_callback, epochend_callback,
                                     # BatchSizeFinder()
