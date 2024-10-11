@@ -349,7 +349,7 @@ class DiskModule(L.LightningModule):
         for key in self.validation_step_outputs[0].keys():
             aggregated[key] = torch.stack([torch.tensor(x[key]) for x in self.validation_step_outputs])
         for key, value in aggregated.items():
-            self.log(key, value.float().mean(), sync_dist=self.multi_gpu)
+            self.log(key, value.float().mean(), sync_dist=self.multi_gpu, rank_zero_only=True)
 
         self.validation_step_outputs.clear()  # free memory
 
