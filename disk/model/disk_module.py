@@ -51,9 +51,8 @@ class DiskModule(L.LightningModule):
 
         # Lightning configurations
         self.automatic_optimization = False # This property activates manual optimization.
-        self.multi_gpu = self.args.num_gpus > 1
-        self.validation_step_outputs_d_stats = []
-        self.validation_step_outputs_p_stats = []
+        self.multi_gpu = self.args.num_gpus * self.args.num_nodes > 1
+        self.validation_step_outputs = []
         # torch.autograd.set_detect_anomaly(True)
         self.example_input_array = [1, 3, args.height, args.width]
 
@@ -63,7 +62,7 @@ class DiskModule(L.LightningModule):
 
     def on_train_batch_start(self, batch: Any, batch_idx: int):
         bitmaps, images = batch
-        e = self.global_step / self.args.chunk_size
+        e = self.current_epoch
         # this is an important part: if we start with a random initialization
         # it's pretty bad at first. Therefore if we set penalties for bad matches,
         # the algorithm will quickly converge to the local optimum of not doing
@@ -78,7 +77,7 @@ class DiskModule(L.LightningModule):
         else:
             ramp = min(1., 0.1 + 0.2 * e)
         if self.global_step % self.log_interval == 0:
-            self.log("train/ramp", ramp, batch_size=len(bitmaps), rank_zero_only=True)
+            self.log("train/ramp", ramp, batch_size=len(bitmaps))
         self.reward_fn = self.reward_class(
             lm_tp=1.,
             lm_fp=-0.25 * ramp,
@@ -132,7 +131,7 @@ class DiskModule(L.LightningModule):
             for key, value in sample.items():
                 aggregated_stats[key].append(value)
         for key, value in aggregated_stats.items():
-            self.log(f"train/{key}", torch.mean(torch.tensor(value, dtype=torch.float32)), sync_dist=self.multi_gpu)
+            self.log(f"train/{key}", torch.mean(torch.tensor(value, dtype=torch.float32)))
 
         loss = torch.mean(torch.tensor(losses))
         with torch.no_grad():
@@ -144,7 +143,7 @@ class DiskModule(L.LightningModule):
 
 
     def logging_step(self, batch, avg_loss, features):
-        self.log("train/loss", avg_loss.detach(), batch_size=len(batch[0]), sync_dist=self.multi_gpu, rank_zero_only=True)
+        self.log("train/loss", avg_loss.detach(), batch_size=len(batch[0]))
 
         if self.global_step % self.log_interval == 0 and self.log_store_ims:
             batch_id = 0
@@ -329,28 +328,30 @@ class DiskModule(L.LightningModule):
         d_stats = self.disc_quality_metric(images, matches)
         p_stats = self.pose_quality_metric(images, matches)
 
-        aggregated_stats = defaultdict(list)
-        # those are metrics similar to the ones used at training time:
+        # d_stats: those are metrics similar to the ones used at training time:
         # number of true/false positives, etc. They are called
         # `discrete` because I compute them after actually performing
         # mutual nearest neighbor (cycle consistent) matching, rather
         # than report the expectations, as I do at trianing time
-        for sample in d_stats.flat:
-            for key, value in sample.items():
-                aggregated_stats[f"val/discrete/{key}"].append(value)
-        # those are metrics related to camera pose estimation: error in
+        # p_stats: those are metrics related to camera pose estimation: error in
         # camera rotation and translation
-        for sample in p_stats.flat:
-            for key, value in sample.items():
-                if key == "inlier_mask":
-                    continue
-                aggregated_stats[f"val/pose/{key}"].append(value)
-
-        for key, value in aggregated_stats.items():
-            mean_value = torch.mean(torch.tensor(value, dtype=torch.float32))
-            self.log(key, mean_value, batch_size=len(bitmaps), on_epoch=True, sync_dist=self.multi_gpu, rank_zero_only=False)
+        for d_sample, p_sample in zip(d_stats.flat, p_stats.flat):
+            del p_sample["inlier_mask"]
+            self.validation_step_outputs.append({**{f"val/discrete/{k}": v for k, v in d_sample.items()},
+                                                 **{f"val/pose/{k}": v for k, v in p_sample.items()}})
 
         del bitmaps, images, features
+
+    def on_validation_epoch_end(self):
+
+        # aggregates metrics/losses from all validation steps
+        aggregated = {}
+        for key in self.validation_step_outputs[0].keys():
+            aggregated[key] = torch.stack([torch.tensor(x[key]) for x in self.validation_step_outputs])
+        for key, value in aggregated.items():
+            self.log(key, value.float(), sync_dist=self.multi_gpu)
+
+        self.validation_step_outputs.clear()  # free memory
 
     # def on_save_checkpoint(self, checkpoint):
     #     # As DINOv2 is pre-trained (and no finetuned, avoid saving its weights (it should help the memory).
