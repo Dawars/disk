@@ -1,9 +1,12 @@
+from pathlib import Path
+
 import h5py, argparse, os, json
 import numpy as np
 from tqdm import tqdm
 
 from colmap.read_model import read_model
 from colmap.read_dense import read_array
+
 
 def convert_depth(name, src_path, dst_path):
     '''
@@ -38,7 +41,11 @@ def create_calibration(image, camera, prefix):
     '''
     Saves camera intrinsics and extrinsics to a HDF file
     '''
-    path = os.path.join(prefix, f'calibration_{image.name}.h5') 
+    #.replace("/0/pictures", "")  # todo replace when combining dataset
+    image_path = Path(image.name)
+    subdirs = image_path.parent
+    (Path(prefix) / subdirs).mkdir(exist_ok=True, parents=True)
+    path = os.path.join(prefix, subdirs, f'{image_path.name}.h5')
 
     with h5py.File(path, 'w') as dst_file:
         dst_file.create_dataset('R', data=image.qvec2rotmat())
@@ -108,24 +115,21 @@ def encode_pairs(pairs):
 
     return id2name, pairs_as_ixs
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('path', type=str)
-    parser.add_argument('--name', type=str, default='default-scene')
-    parser.add_argument('--no-depth', action='store_true')
+def process_scene(scene_path, data_root, save_root, no_depth=True):
+    scene_root = data_root / scene_path
+    # image_root = data_root / "images"
+    scene_subdir = scene_root.parent.parent.relative_to(data_root)
+    # print(data_root)
+    print(str(scene_subdir).replace("/", "_"))
+    scene_name = str(scene_subdir).replace("/", "_")
+    image_path = os.path.join(scene_root, "undistort", 'images')
+    sparse_path = os.path.join(scene_root, "undistort", 'sparse')
+    calib_path = save_root / scene_subdir / 'calibration'
+    json_path = save_root / scene_subdir / 'dataset.json'
 
-    args = parser.parse_args()
-
-    args.path = os.path.abspath(args.path)
-
-    image_path     = os.path.join(args.path, 'images')
-    sparse_path    = os.path.join(args.path, 'sparse')
-    calib_path     = os.path.join(args.path, 'dataset', 'calibration')
-    json_path      = os.path.join(args.path, 'dataset', 'dataset.json')
-
-    if not args.no_depth:
-        depth_src_path = os.path.join(args.path, 'stereo', 'depth_maps')
-        depth_dst_path = os.path.join(args.path, 'dataset', 'depth')
+    if not no_depth:
+        depth_src_path = os.path.join(sparse_path, "..", 'stereo', 'depth_maps')
+        depth_dst_path = os.path.join(save_root, scene_subdir, 'depth')
     else:
         depth_src_path = ''
         depth_dst_path = ''
@@ -136,9 +140,9 @@ if __name__ == '__main__':
 
     print('Creating calibration files...')
     for image in tqdm(images.values()):
-        create_calibration(image, cameras[image.camera_id], calib_path) 
+        create_calibration(image, cameras[image.camera_id], calib_path)
 
-    if not args.no_depth:
+    if not no_depth:
         os.makedirs(depth_dst_path, exist_ok=True)
         print('Converting depth...')
         for image in tqdm(images.values()):
@@ -149,14 +153,23 @@ if __name__ == '__main__':
     images, tuples = encode_pairs(covisible_pairs(images))
 
     dataset = {
-        args.name: {
-            'images'    : images,
-            'tuples'    : tuples,
-            'calib_path': calib_path,
-            'depth_path': depth_dst_path,
-            'image_path': image_path,
+        scene_name: {
+            'images': images,
+            'tuples': tuples,
+            'calib_path': str(calib_path),
+            'depth_path': str(depth_dst_path),
+            'image_path': str(image_path),
         },
     }
 
     with open(json_path, 'w') as json_file:
         json.dump(dataset, json_file)
+
+
+if __name__ == '__main__':
+    save_root = Path("/vast/ro38seb/datasets/MegaScenes/disk")
+    scene_list = Path("scene_list.txt").read_text().split()
+    for recon_path in tqdm(scene_list):
+        process_scene(Path(recon_path),
+                      Path("/vast/ro38seb/datasets/MegaScenes/"),
+                      save_root)
