@@ -115,7 +115,7 @@ def extract(dataset, save_path):
     )
 
     if args.mode == 'nms':
-        extract = partial(
+        extract, heatmaps = partial(
             model.features,
             kind='nms',
             window_size=args.window,
@@ -123,7 +123,7 @@ def extract(dataset, save_path):
             n=args.n
         )
     else:
-        extract = partial(model.features, kind='rng')
+        extract, heatmaps = partial(model.features, kind='rng')
 
     os.makedirs(os.path.join(save_path), exist_ok=True)
     keypoint_h5   = h5py.File(os.path.join(save_path, 'keypoints.h5'), 'w')

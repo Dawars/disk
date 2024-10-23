@@ -13,7 +13,7 @@ from disk.loss.rewards import EpipolarReward, DepthReward
 from disk.model import ConsistentMatcher, CycleMatcher
 from disk.utils.training_utils import log_image_matches
 
-from mickey.lib.models.MicKey.modules.utils.training_utils import vis_inliers
+from mickey.lib.models.MicKey.modules.utils.training_utils import vis_inliers, colorize
 
 
 # define the LightningModule
@@ -22,7 +22,7 @@ class DiskModule(L.LightningModule):
         super().__init__()
         # create the feature extractor and descriptor. It does not handle matching,
         # this will come later
-        self.disk = DISK(window=8, desc_dim=args.desc_dim)
+        self.disk = DISK(window=8, desc_dim=args.desc_dim, backbone=args.backbone)
 
         self.args = args
 
@@ -103,7 +103,8 @@ class DiskModule(L.LightningModule):
 
         # extract the features. They are a numpy array of size [2 * batch_size]
         # which contains objects of type disk.common.Features
-        features_ = self.disk.features(bitmaps_, kind='rng')
+        true_shapes = torch.stack([image.true_shape for image in images.flat])
+        features_, heatmaps = self.disk.features(bitmaps_, true_shapes, kind='rng')
         # reshape them back to [2, batch_size]
         features = features_.reshape(*bitmaps.shape[:2])
         # normally we'd do something like
@@ -136,13 +137,13 @@ class DiskModule(L.LightningModule):
         loss = torch.mean(torch.tensor(losses))
         with torch.no_grad():
             if optimize:  # don't double log during gradient accumulation
-                self.logging_step(batch, loss, features)
+                self.logging_step(batch, loss, features, heatmaps)
         del bitmaps, images, features
 
         return loss
 
 
-    def logging_step(self, batch, avg_loss, features):
+    def logging_step(self, batch, avg_loss, features, heatmaps):
         self.log("train/loss", avg_loss.detach(), batch_size=len(batch[0]))
 
         if self.global_step % self.log_interval == 0 and self.log_store_ims:
@@ -162,7 +163,8 @@ class DiskModule(L.LightningModule):
             inliers_list_ours = torch.cat([matched_pairs.kps1[matched_pairs.matches[0, inlier_match_indices]],
                                            matched_pairs.kps2[matched_pairs.matches[1, inlier_match_indices]]], dim=-1)
             im_inliers = vis_inliers([inliers_list_ours], im_batch, batch_i=batch_id, norm_color=False)
-
+            heatmap_vis1 = colorize(heatmaps[batch_id])
+            heatmap_vis2 = colorize(heatmaps[batch_id+1])
             features1: Features = features[batch_id, 0]
             features2: Features = features[batch_id, 1]
             match_dist = self.matcher.match_pair(features1, features2, self.current_epoch)
@@ -176,6 +178,8 @@ class DiskModule(L.LightningModule):
                                                                                     )
             logger: WandbLogger = self.logger
 
+            logger.log_image(key='training_matching/scores0', images=[heatmap_vis1], step=self.global_step)
+            logger.log_image(key='training_matching/scores1', images=[heatmap_vis2], step=self.global_step)
             logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.global_step)
             logger.log_image(key='training_matching/best_matches_desc', images=[im_matches], step=self.global_step)
             logger.log_image(key='training_scores/map0', images=[sc_map0], step=self.global_step)
@@ -320,7 +324,8 @@ class DiskModule(L.LightningModule):
         bitmaps, images = batch
         bitmaps_ = bitmaps.reshape(-1, *bitmaps.shape[2:])
         # at validation we use NMS extraction...
-        features_ = self.disk.features(bitmaps_, kind='nms')
+        true_shapes = torch.stack([image.true_shape for image in images.flat])
+        features_, heatmaps = self.disk.features(bitmaps_, true_shapes, kind='nms')
         features = features_.reshape(*bitmaps.shape[:2])
 
         # ...and nearest-neighbor matching

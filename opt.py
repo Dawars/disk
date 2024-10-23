@@ -31,6 +31,10 @@ def get_opts():
         help='Reward criterion to use'
     )
     parser.add_argument(
+        '--backbone', choices=['unet', 'dust3r', 'mickey'], default='unet',
+        help='Backbone architecture to use'
+    )
+    parser.add_argument(
         '--save-dir', type=Path, default='artifacts',
         help=('Path for saving artifacts (checkpoints and tensorboard logs). Will '
               'be created if doesn\'t exist')

@@ -38,7 +38,8 @@ class Image:
         T     : [3],
         bitmap: [3, 'H', 'W'],
         depth, #[1, 'H', 'W'],
-        bitmap_path: str
+        bitmap_path: str,
+        true_shape=None
     ):
         self.K = K
         self.R = R
@@ -49,6 +50,7 @@ class Image:
 
         # save bitmap path for potential debugging purposes
         self.bitmap_path = bitmap_path
+        self.true_shape = true_shape if true_shape is not None else torch.tensor(self.shape)
 
     @property
     def K_inv(self):
@@ -90,7 +92,7 @@ class Image:
         else:
             depth = None
 
-        return Image(K, self.R, self.T, bitmap, depth, self.bitmap_path)
+        return Image(K, self.R, self.T, bitmap, depth, self.bitmap_path)  # , self.true_shape)  # scaling doesn't change aspect ratio
 
     def pad(self, size):
         bitmap = _pad(self.bitmap, size, value=0)
@@ -99,13 +101,13 @@ class Image:
         else:
             depth = None
 
-        return Image(self.K, self.R, self.T, bitmap, depth, self.bitmap_path)
+        return Image(self.K, self.R, self.T, bitmap, depth, self.bitmap_path, self.true_shape)
 
     def to(self, *args, **kwargs):
         # use getattr/setattr to avoid repetitive code.
         # exclude `self.bitmap` because we don't need it on GPU (it's treated
         # separately by the dataloader)
-        TRANSFERRED_ATTRS = ['K', 'R', 'T', 'depth']
+        TRANSFERRED_ATTRS = ['K', 'R', 'T', 'depth', 'true_shape']
 
         for key in TRANSFERRED_ATTRS:
             attr = getattr(self, key)
