@@ -45,7 +45,7 @@ def _crop(image, crop_size):
  
 @dimchecked
 def _read_bitmap(bitmap_path) -> [3, 'h', 'w']:
-    bitmap = imageio.imread(bitmap_path)
+    bitmap = imageio.v2.imread(bitmap_path)
     bitmap = bitmap.astype(np.float32) / 255
 
     return torch.from_numpy(bitmap).permute(2, 0, 1)
