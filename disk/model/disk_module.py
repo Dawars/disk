@@ -27,6 +27,8 @@ class DiskModule(L.LightningModule):
         # create the feature extractor and descriptor. It does not handle matching,
         # this will come later
         self.disk = DISK(window=args.window, desc_dim=args.desc_dim, backbone=args.backbone)
+        if args.compile:
+            self.disk.model = torch.compile(self.disk.model)
 
         self.args = args
 

@@ -105,5 +105,9 @@ def get_opts():
         '--debug', action=argparse.BooleanOptionalAction,
         help='Debug mode',
     )
+    parser.add_argument(
+        '--compile', action=argparse.BooleanOptionalAction,
+        help='Torch compile model',
+    )
     args = parser.parse_args()
     return args
