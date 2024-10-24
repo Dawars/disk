@@ -46,7 +46,7 @@ def train_model(args):
     epochend_callback = pl.callbacks.ModelCheckpoint(
         dirpath=ckpt_dir,
         filename='{epoch}-last',
-        save_last=True,
+        save_last='link',
         save_top_k=1,
         every_n_epochs=1,
         save_on_train_epoch_end=True
