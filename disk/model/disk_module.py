@@ -26,7 +26,7 @@ class DiskModule(L.LightningModule):
         super().__init__()
         # create the feature extractor and descriptor. It does not handle matching,
         # this will come later
-        self.disk = DISK(window=8, desc_dim=args.desc_dim, backbone=args.backbone)
+        self.disk = DISK(window=args.window, desc_dim=args.desc_dim, backbone=args.backbone)
 
         self.args = args
 

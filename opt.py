@@ -19,6 +19,10 @@ def get_opts():
         help='Number of node',
     )
     parser.add_argument(
+        '--window', type=int, default=8,
+        help='Windows size',
+    )
+    parser.add_argument(
         '--precision', type=str, default="32-true",
         help='"16-mixed" for automatic mixed precision ',
     )
