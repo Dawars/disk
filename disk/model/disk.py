@@ -31,7 +31,19 @@ class DISK(torch.nn.Module):
             )
         elif backbone == "dust3r":
             from disk.model.dust3r import DUSt3R
-            self.model = DUSt3R()
+            self.model = DUSt3R(img_size=(224, 224),  # input image size
+                                patch_size=16,  # patch_size
+                                enc_embed_dim=768,  # encoder feature dimension
+                                enc_depth=24,  # encoder depth
+                                enc_num_heads=12,  # encoder number of heads in the transformer block
+                                dec_embed_dim=512,  # decoder feature dimension
+                                dec_depth=8,  # decoder depth
+                                dec_num_heads=16,  # decoder number of heads in the transformer block
+                                mlp_ratio=4,
+                                norm_im2_in_dec=True,
+                                # whether to apply normalization of the 'memory' = (second image) in the decoder
+                                pos_embed='RoPE100',
+                                desc_dim=desc_dim)  # positional embedding (either cosine or RoPE100))
         elif backbone == "mickey":
             from disk.model.mickey import MicKey
             self.model = MicKey()
@@ -70,7 +82,7 @@ class DISK(torch.nn.Module):
 
         B = images.shape[0]
         try:
-            if self.backbone in ["unet"]:
+            if self.backbone in ["unet", "dust3r"]:
                 model_output = self.model(images)
             else:
                 model_output = self.model(images, true_shapes)
