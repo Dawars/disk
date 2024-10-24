@@ -35,6 +35,10 @@ def get_opts():
         help='Backbone architecture to use'
     )
     parser.add_argument(
+        '--optimizer', choices=['adam', 'adamw'], default='adam',
+        help='Optimizer'
+    )
+    parser.add_argument(
         '--save-dir', type=Path, default='artifacts',
         help=('Path for saving artifacts (checkpoints and tensorboard logs). Will '
               'be created if doesn\'t exist')

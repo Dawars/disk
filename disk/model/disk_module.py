@@ -13,6 +13,10 @@ from disk.loss.rewards import EpipolarReward, DepthReward
 from disk.model import ConsistentMatcher, CycleMatcher
 from disk.utils.training_utils import log_image_matches
 
+import mast3r.utils.path_to_dust3r  # noqa
+import dust3r.utils.path_to_croco  # noqa: F401
+from utils import misc
+
 from mickey.lib.models.MicKey.modules.utils.training_utils import vis_inliers, colorize
 
 
@@ -57,7 +61,13 @@ class DiskModule(L.LightningModule):
         self.example_input_array = [1, 3, args.height, args.width]
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=1e-4)
+        if self.args.optimizer == "adam":
+            optimizer = optim.Adam(self.parameters(), lr=1e-4)
+
+        elif self.args.optimizer == "adamw":
+            # dust3r
+            param_groups = misc.get_parameter_groups(self.disk.model, 0.05)
+            optimizer = optim.AdamW(param_groups, weight_decay=0.05, betas=(0.9, 0.95),lr=1e-4)
         return optimizer
 
     def on_train_batch_start(self, batch: Any, batch_idx: int):
@@ -125,6 +135,9 @@ class DiskModule(L.LightningModule):
         if optimize:
             optim = self.optimizers()
             optim.step()
+            sch = self.lr_schedulers()
+            if sch is not None:
+                sch.step()
             optim.zero_grad()
 
         aggregated_stats = defaultdict(list)
