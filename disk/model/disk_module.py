@@ -159,12 +159,18 @@ class DiskModule(L.LightningModule):
             matches = self.valtime_matcher.match_pairwise(features)
             relpose = self.pose_quality_metric(images, matches)
             matched_pairs: MatchedPairs = matches[batch_id, 0]
+            logger: WandbLogger = self.logger
+
             inlier_match_indices = relpose[batch_id, 0]["inlier_mask"]
-            inliers_list_ours = torch.cat([matched_pairs.kps1[matched_pairs.matches[0, inlier_match_indices]],
+            if len(inlier_match_indices) > 0:
+                inliers_list_ours = torch.cat([matched_pairs.kps1[matched_pairs.matches[0, inlier_match_indices]],
                                            matched_pairs.kps2[matched_pairs.matches[1, inlier_match_indices]]], dim=-1)
-            im_inliers = vis_inliers([inliers_list_ours], im_batch, batch_i=batch_id, norm_color=False)
-            heatmap_vis1 = colorize(heatmaps[batch_id])
-            heatmap_vis2 = colorize(heatmaps[batch_id+1])
+                im_inliers = vis_inliers([inliers_list_ours], im_batch, batch_i=batch_id, norm_color=False)
+                logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.global_step)
+            else:
+                print("No inliers")
+            heatmap_vis1 = colorize(heatmaps[batch_id], cmap='viridis')
+            heatmap_vis2 = colorize(heatmaps[batch_id+1], cmap='viridis')
             features1: Features = features[batch_id, 0]
             features2: Features = features[batch_id, 1]
             match_dist = self.matcher.match_pair(features1, features2, self.current_epoch)
@@ -176,11 +182,9 @@ class DiskModule(L.LightningModule):
                                                                                      batch_i=batch_id,
                                                                                      sc_temp=1
                                                                                     )
-            logger: WandbLogger = self.logger
 
             logger.log_image(key='training_matching/scores0', images=[heatmap_vis1], step=self.global_step)
             logger.log_image(key='training_matching/scores1', images=[heatmap_vis2], step=self.global_step)
-            logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.global_step)
             logger.log_image(key='training_matching/best_matches_desc', images=[im_matches], step=self.global_step)
             logger.log_image(key='training_scores/map0', images=[sc_map0], step=self.global_step)
             logger.log_image(key='training_scores/map1', images=[sc_map1], step=self.global_step)
