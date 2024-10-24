@@ -148,6 +148,7 @@ def debug_reward_matches_log(data, gradients, batch_i = 0, num_vis_pts = 30):
 
 def create_exp_name(exp_name, args):
     exp_name += ('_Reward_' + args.reward)
+    exp_name += ('_Backbone' + str(args.backbone))
     exp_name += ('_GPU' + str(args.num_gpus))
     exp_name += ('_BatchSize' + str(args.batch_size))
     exp_name += ('_Epoch' + str(args.num_epochs))
