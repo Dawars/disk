@@ -75,28 +75,25 @@ class DUSt3R(CroCoNet):
         super().__init__(**croco_kwargs)
         self.desc_dim = desc_dim
         # dust3r specific initialization
-        self.dec_blocks2 = deepcopy(self.dec_blocks)
         self.set_downstream_head(output_mode, head_type, landscape_only, depth_mode, conf_mode, **croco_kwargs)
         self.set_freeze(freeze)
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, **kw):
         if os.path.isfile(pretrained_model_name_or_path):
+            # model = CroCoNet(**ckpt.get('croco_kwargs', {})).to(device)
+            # model.eval()
+            # msg = model.load_state_dict(ckpt['model'], strict=True)
             return load_model(pretrained_model_name_or_path, device='cpu')
         else:
-            return super(DUSt3R, cls).from_pretrained(pretrained_model_name_or_path, **kw)
+            try:
+                model = super(DUSt3R, cls).from_pretrained(pretrained_model_name_or_path, **kw)
+            except TypeError as e:
+                raise Exception(f'tried to load {pretrained_model_name_or_path} from huggingface, but failed')
+            return model
 
     def _set_patch_embed(self, img_size=224, patch_size=16, enc_embed_dim=768):
         self.patch_embed = get_patch_embed(self.patch_embed_cls, img_size, patch_size, enc_embed_dim)
-
-    def load_state_dict(self, ckpt, **kw):
-        # duplicate all weights for the second decoder if not present
-        new_ckpt = dict(ckpt)
-        if not any(k.startswith('dec_blocks2') for k in ckpt):
-            for key, value in ckpt.items():
-                if key.startswith('dec_blocks'):
-                    new_ckpt[key.replace('dec_blocks', 'dec_blocks2')] = value
-        return super().load_state_dict(new_ckpt, **kw)
 
     def set_freeze(self, freeze):  # this is for use by downstream models
         self.freeze = freeze
@@ -185,11 +182,11 @@ class DUSt3R(CroCoNet):
         f2 = self.decoder_embed(f2)
 
         final_output.append((f1, f2))
-        for blk1, blk2 in zip(self.dec_blocks, self.dec_blocks2):
+        for blk1 in self.dec_blocks:
             # img1 side
             f1, _ = blk1(*final_output[-1][::+1], pos1, pos2)
             # img2 side
-            f2, _ = blk2(*final_output[-1][::-1], pos2, pos1)
+            f2, _ = blk1(*final_output[-1][::-1], pos2, pos1)
             # store the result
             final_output.append((f1, f2))
 

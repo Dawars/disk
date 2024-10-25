@@ -1,3 +1,5 @@
+import os
+
 import torch
 import numpy as np
 
@@ -31,19 +33,22 @@ class DISK(torch.nn.Module):
             )
         elif backbone == "dust3r":
             from disk.model.dust3r import DUSt3R
-            self.model = DUSt3R(img_size=(224, 224),  # input image size
-                                patch_size=16,  # patch_size
-                                enc_embed_dim=768,  # encoder feature dimension
-                                enc_depth=24,  # encoder depth
-                                enc_num_heads=12,  # encoder number of heads in the transformer block
-                                dec_embed_dim=512,  # decoder feature dimension
-                                dec_depth=8,  # decoder depth
-                                dec_num_heads=16,  # decoder number of heads in the transformer block
-                                mlp_ratio=4,
-                                norm_im2_in_dec=True,
-                                # whether to apply normalization of the 'memory' = (second image) in the decoder
-                                pos_embed='RoPE100',
+            self.model = DUSt3R(pos_embed='RoPE100',
+                                img_size=(224, 224),
+                                head_type='linear',
+                                enc_embed_dim=1024,
+                                enc_depth=24,
+                                enc_num_heads=16,
+                                dec_embed_dim=768,
+                                dec_depth=12,
+                                dec_num_heads=12,
+                                landscape_only=False,
                                 desc_dim=desc_dim)  # positional embedding (either cosine or RoPE100))
+            taskId = int(os.getenv('SLURM_ARRAY_JOB_ID', 0))
+            if taskId == 0:
+                ckpt = torch.load("CroCo_V2_ViTLarge_BaseDecoder.pth", map_location='cpu')
+                s = self.model.load_state_dict(ckpt['model'], strict=False)
+                print("Croco weights loaded", s)
         elif backbone == "mickey":
             from disk.model.mickey import MicKey
             self.model = MicKey()
