@@ -58,25 +58,26 @@ def log_image_matches(match_dist: MatchDistribution, batch, features, train_dept
     scores = match_dist.dense_p()[matches_list[0], matches_list[1]]
     matches_list = matches_list[:, torch.argsort(scores, descending=True)]
     scores, _ = torch.sort(scores, descending=True)
-    max_sc = scores.max().detach().cpu().numpy()
-    min_sc = scores.min().detach().cpu().numpy()
+    if len(scores) > 0:
+        max_sc = scores.max().detach().cpu().numpy()
+        min_sc = scores.min().detach().cpu().numpy()
 
-    for i_m in range(min(num_vis_matches, matches_list.shape[1])):
-        pt_ref = features1.kp[matches_list[0, i_m]].detach().cpu().numpy()
-        pt_dst = features2.kp[matches_list[1, i_m]].detach().cpu().numpy()
-        sc_matching = scores[i_m].detach().cpu().numpy()
+        for i_m in range(min(num_vis_matches, matches_list.shape[1])):
+            pt_ref = features1.kp[matches_list[0, i_m]].detach().cpu().numpy()
+            pt_dst = features2.kp[matches_list[1, i_m]].detach().cpu().numpy()
+            sc_matching = scores[i_m].detach().cpu().numpy()
 
-        # Normalise score for better visualisation
-        sc_matching = (sc_matching - min_sc) / (max_sc - min_sc + 1e-16)
-        if norm_color:
-            color_tmp = color * np.tanh(sc_matching/0.3)
-        else:
-            color_tmp = color
+            # Normalise score for better visualisation
+            sc_matching = (sc_matching - min_sc) / (max_sc - min_sc + 1e-16)
+            if norm_color:
+                color_tmp = color * np.tanh(sc_matching/0.3)
+            else:
+                color_tmp = color
 
-        tmp_im = cv2.line(tmp_im, (int(pt_ref[0]), int(pt_ref[1])), (shape_im[1] + 50 + int(pt_dst[0]), int(pt_dst[1])), color_tmp, 2)
+            tmp_im = cv2.line(tmp_im, (int(pt_ref[0]), int(pt_ref[1])), (shape_im[1] + 50 + int(pt_dst[0]), int(pt_dst[1])), color_tmp, 2)
 
-        tmp_im = cv2.circle(tmp_im, (int(pt_ref[0]), int(pt_ref[1])), 2, color, 2)
-        tmp_im = cv2.circle(tmp_im, (int(shape_im[1] + 50 + pt_dst[0]), int(pt_dst[1])), 2, color, 2)
+            tmp_im = cv2.circle(tmp_im, (int(pt_ref[0]), int(pt_ref[1])), 2, color, 2)
+            tmp_im = cv2.circle(tmp_im, (int(shape_im[1] + 50 + pt_dst[0]), int(pt_dst[1])), 2, color, 2)
 
     im_matches = torch.from_numpy(tmp_im).permute(2, 0, 1) / 255.
     return im_matches, sc_map0, sc_map1, depth_map0, depth_map1
