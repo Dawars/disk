@@ -19,9 +19,9 @@ import mast3r.utils.path_to_dust3r  # noqa
 from dust3r.model import load_model
 from dust3r.utils.misc import transpose_to_landscape, fill_default_args, freeze_all_params  # noqa
 from dust3r.patch_embed import get_patch_embed
+from dust3r.heads.dpt_head import PixelwiseTaskWithDPT
 import dust3r.utils.path_to_croco  # noqa: F401
 
-from models.head_downstream import PixelwiseTaskWithDPT
 from models.croco import CroCoNet  # noqa
 
 
@@ -136,10 +136,7 @@ class DUSt3R(CroCoNet):
                                         hooks_idx=[0, l2 * 2 // 4, l2 * 3 // 4, l2],
                                         dim_tokens=[ed, dd, dd, dd],
                                         postprocess=None,
-                                        depth_mode=self.depth_mode,
-                                        conf_mode=self.conf_mode,
                                         head_type='regression')
-            self.downstream_head1.setup(self)
         else:
             raise NotImplementedError(f"unexpected {head_type=} and {output_mode=}")
 
