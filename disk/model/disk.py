@@ -14,28 +14,27 @@ DEFAULT_SETUP = {**thin_setup, 'bias': True, 'padding': True}
 class DISK(torch.nn.Module):
     def __init__(
         self,
-        desc_dim=128,
-        window=8,
+        args,
         setup=DEFAULT_SETUP,
         kernel_size=5,
-        backbone="unet",
     ):
         super(DISK, self).__init__()
 
-        self.desc_dim = desc_dim
-        self.backbone = backbone
-        if backbone == "unet":
+        self.desc_dim = args.desc_dim
+        self.backbone = args.backbone
+        if self.backbone == "unet":
             self.model = Unet(
                 in_features=3, size=kernel_size,
                 down=[16, 32, 64, 64, 64],
-                up=[64, 64, 64, desc_dim+1],
+                up=[64, 64, 64, self.desc_dim+1],
                 setup=setup,
             )
-        elif backbone == "dust3r":
+        elif self.backbone == "dust3r":
             from disk.model.dust3r import DUSt3R
             self.model = DUSt3R(pos_embed='RoPE100',
                                 img_size=(224, 224),
-                                head_type='linear',
+                                head_type='dpt',
+                                freeze=self.freeze,
                                 enc_embed_dim=1024,
                                 enc_depth=24,
                                 enc_num_heads=16,
@@ -43,13 +42,13 @@ class DISK(torch.nn.Module):
                                 dec_depth=12,
                                 dec_num_heads=12,
                                 landscape_only=False,
-                                desc_dim=desc_dim)  # positional embedding (either cosine or RoPE100))
+                                desc_dim=self.desc_dim)  # positional embedding (either cosine or RoPE100))
             taskId = int(os.getenv('SLURM_ARRAY_JOB_ID', 0))
             if taskId == 0:
                 ckpt = torch.load("CroCo_V2_ViTLarge_BaseDecoder.pth", map_location='cpu')
                 s = self.model.load_state_dict(ckpt['model'], strict=False)
                 print("Croco weights loaded", s)
-        elif backbone == "mickey":
+        elif self.backbone == "mickey":
             from disk.model.mickey import MicKey
             self.model = MicKey()
         else:

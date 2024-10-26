@@ -31,6 +31,10 @@ def get_opts():
         help='Experiment name prefix',
     )
     parser.add_argument(
+        '--freeze', type=str, default="none",
+        help='Model parts to freeze',
+    )
+    parser.add_argument(
         '--reward', choices=['epipolar', 'depth'], default='depth',
         help='Reward criterion to use'
     )
