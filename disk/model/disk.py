@@ -22,6 +22,7 @@ class DISK(torch.nn.Module):
 
         self.desc_dim = args.desc_dim
         self.backbone = args.backbone
+        window = args.window
         if self.backbone == "unet":
             self.model = Unet(
                 in_features=3, size=kernel_size,
