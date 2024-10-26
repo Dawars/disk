@@ -28,7 +28,7 @@ class DiskModule(L.LightningModule):
         # this will come later
         self.disk = DISK(window=args.window, desc_dim=args.desc_dim, backbone=args.backbone)
         if args.compile:
-            self.disk.model = torch.compile(self.disk.model)
+            self.disk.model = torch.compile(self.disk.model, dynamic=True)
 
         self.args = args
 
