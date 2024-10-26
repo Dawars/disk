@@ -337,6 +337,8 @@ class DiskModule(L.LightningModule):
         leaves = []
         grads = []
         for feat, detached_feat in zip(features.flat, detached_features.flat):
+            if len(feat.desc) == 0:
+                continue
             leaves.extend(feat.grad_tensors())
             grads.extend([t.grad for t in detached_feat.grad_tensors()])
 
