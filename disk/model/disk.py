@@ -34,7 +34,7 @@ class DISK(torch.nn.Module):
             self.model = DUSt3R(pos_embed='RoPE100',
                                 img_size=(224, 224),
                                 head_type='dpt',
-                                freeze=self.freeze,
+                                freeze=args.freeze,
                                 enc_embed_dim=1024,
                                 enc_depth=24,
                                 enc_num_heads=16,
