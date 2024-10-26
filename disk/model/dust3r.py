@@ -130,7 +130,7 @@ class DUSt3R(CroCoNet):
             out_nchan = self.desc_dim
             ed = self.enc_embed_dim
             dd = self.dec_embed_dim
-            self.downstream_head1 = PixelwiseTaskWithDPT(num_channels=out_nchan + self.has_conf,
+            self.downstream_head1 = PixelwiseTaskWithDPT(num_channels=out_nchan + 1,
                                         feature_dim=feature_dim,
                                         last_dim=last_dim,
                                         hooks_idx=[0, l2 * 2 // 4, l2 * 3 // 4, l2],
