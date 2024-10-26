@@ -139,6 +139,7 @@ class DUSt3R(CroCoNet):
                                         depth_mode=self.depth_mode,
                                         conf_mode=self.conf_mode,
                                         head_type='regression')
+            self.downstream_head1.setup(self)
         else:
             raise NotImplementedError(f"unexpected {head_type=} and {output_mode=}")
 
