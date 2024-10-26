@@ -309,7 +309,7 @@ class DiskModule(L.LightningModule):
                     image2 = scene_images[i_image2]
                     features2 = scene_features[i_image2]
 
-                    if len(features1) == 0 or len(features2) == 0:
+                    if len(features1.desc) == 0 or len(features2.desc) == 0:
                         print(f"Feature is empty {len(features1.desc)=} {len(features2.desc)=}")
                         stats[i_scene, i_decision] = {}
                         i_decision += 1
