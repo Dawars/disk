@@ -33,7 +33,7 @@ class DISK(torch.nn.Module):
         elif self.backbone == "dust3r":
             from disk.model.dust3r import DUSt3R
             self.model = DUSt3R(pos_embed='RoPE100',
-                                img_size=(224, 224),
+                                img_size=(args.width, args.height),
                                 head_type='dpt',
                                 freeze=args.freeze,
                                 enc_embed_dim=1024,
