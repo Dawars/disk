@@ -127,17 +127,20 @@ class DiskModule(L.LightningModule):
         # (the algorithm is very memory hungry because we create huge feature
         # distance matrices). This is described in the paper in section 4.
         # in "optimization"
-        losses, stats = self.accumulate_grad(images, features)
+        optim = self.optimizers()
+        sch = self.lr_schedulers()
 
+        losses, stats = self.accumulate_grad(images, features)
+        if losses is None:  # skip batch
+            optim.zero_grad()
+            return torch.nan
         # Make an optimization step. args.substep is there to allow making bigger
         # "batches" by just accumulating gradient across several of those.
         # Again, this is because the algorithm is so memory hungry it can be
         # an issue to have batches bigger than 1.
         optimize = (batch_idx + 1) % self.args.substep == 0
         if optimize:
-            optim = self.optimizers()
             optim.step()
-            sch = self.lr_schedulers()
             if sch is not None:
                 sch.step()
             optim.zero_grad()
@@ -310,10 +313,8 @@ class DiskModule(L.LightningModule):
                     features2 = scene_features[i_image2]
 
                     if len(features1.desc) == 0 or len(features2.desc) == 0:
-                        print(f"Feature is empty {len(features1.desc)=} {len(features2.desc)=}")
-                        stats[i_scene, i_decision] = {}
-                        i_decision += 1
-                        continue
+                        print(f"Feature is empty, skipping batch {len(features1.desc)=} {len(features2.desc)=}")
+                        return None, None
 
                     # establish the match distribution and calculate the
                     # gradient estimator
@@ -337,8 +338,6 @@ class DiskModule(L.LightningModule):
         leaves = []
         grads = []
         for feat, detached_feat in zip(features.flat, detached_features.flat):
-            if len(feat.desc) == 0:
-                continue
             leaves.extend(feat.grad_tensors())
             grads.extend([t.grad for t in detached_feat.grad_tensors()])
 
