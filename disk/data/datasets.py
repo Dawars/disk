@@ -76,7 +76,7 @@ def get_datasets(
     dataloader_kwargs = {
         'collate_fn': train_dataset.collate_fn,
         'pin_memory': True,
-        'num_workers': 12,
+        'num_workers': min(batch_size, 12),
     }
 
     train_chunk_iter = RandomSampler(
