@@ -13,6 +13,8 @@ import lightning.pytorch as pl
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.plugins.environments import SLURMEnvironment
 from lightning.pytorch.callbacks import BatchSizeFinder
+from lightning.pytorch.plugins import MixedPrecision
+from lightning.pytorch.strategies import DDPStrategy
 # torch.backends.cuda.matmul.allow_tf32 = True  # for gpu >= Ampere and pytorch >= 1.12
 
 import json
@@ -65,6 +67,7 @@ def train_model(args):
 
     trainer = pl.Trainer(devices=args.num_gpus,
                          num_nodes=args.num_nodes,
+                         strategy=DDPStrategy(find_unused_parameters=True, precision_plugin=MixedPrecision(precision=args.precision, device="cuda") if args.precision == "16-mixed" else None),
                          precision=args.precision,
                          log_every_n_steps=50, #cfg.TRAINING.LOG_INTERVAL,
                          val_check_interval=1.0, #cfg.TRAINING.VAL_INTERVAL,
