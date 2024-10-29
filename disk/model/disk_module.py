@@ -6,8 +6,10 @@ import torch
 from torch import optim, nn, utils, Tensor
 import lightning as L
 from lightning.pytorch.loggers import WandbLogger
+from torch_dimcheck import dimchecked
 
-from disk import DISK, MatchDistribution, Features, NpArray, Image, MatchedPairs
+from disk import MatchDistribution, Features, NpArray, Image, MatchedPairs
+from disk.model.detector import Detector
 from disk.loss import PoseQuality, DiscreteMetric
 from disk.loss.rewards import EpipolarReward, DepthReward
 from disk.model import ConsistentMatcher, CycleMatcher
@@ -20,16 +22,53 @@ from utils import misc
 from mickey.lib.models.MicKey.modules.utils.training_utils import vis_inliers, colorize
 
 
-# define the LightningModule
 class DiskModule(L.LightningModule):
     def __init__(self, args):
         super().__init__()
         # create the feature extractor and descriptor. It does not handle matching,
         # this will come later
-        self.disk = DISK(args)
-        if args.compile:
-            self.disk.model = torch.compile(self.disk.model, dynamic=True)
+        self.desc_dim = args.desc_dim
+        self.backbone = args.backbone
+        if self.backbone == "unet":
+            from unets import Unet, thin_setup
 
+            DEFAULT_SETUP = {**thin_setup, 'bias': True, 'padding': True}
+
+            self.model = Unet(
+                in_features=3, size=5,  # kernel_size,
+                down=[16, 32, 64, 64, 64],
+                up=[64, 64, 64, self.desc_dim+1],
+                setup=DEFAULT_SETUP,
+            )
+        elif self.backbone == "dust3r":
+            from disk.model.dust3r import DUSt3R
+            self.model = DUSt3R(pos_embed='RoPE100',
+                                img_size=(args.width, args.height),
+                                head_type='dpt',
+                                freeze=args.freeze,
+                                enc_embed_dim=1024,
+                                enc_depth=24,
+                                enc_num_heads=16,
+                                dec_embed_dim=768,
+                                dec_depth=12,
+                                dec_num_heads=12,
+                                landscape_only=False,
+                                desc_dim=self.desc_dim)  # positional embedding (either cosine or RoPE100))
+            taskId = int(os.getenv('SLURM_ARRAY_JOB_ID', 0))
+            if taskId == 0:
+                ckpt = torch.load("CroCo_V2_ViTLarge_BaseDecoder.pth", map_location='cpu')
+                s = self.model.load_state_dict(ckpt['model'], strict=False)
+                print("Croco weights loaded", s)
+        elif self.backbone == "mickey":
+            from disk.model.mickey import MicKey
+            self.model = MicKey()
+        else:
+            raise ValueError("backbone type not implemented")
+
+        if args.compile:
+            self.model = torch.compile(self.model, dynamic=True)
+
+        self.detector = Detector(window=args.window)
         self.args = args
 
         # set up the inference-time matching algorthim and validation metrics
@@ -60,7 +99,7 @@ class DiskModule(L.LightningModule):
         self.multi_gpu = self.args.num_gpus * self.args.num_nodes > 1
         self.validation_step_outputs = []
         # torch.autograd.set_detect_anomaly(True)
-        self.example_input_array = [1, 3, args.height, args.width]
+        self.example_input_array = torch.rand([1, 3, args.height, args.width])
 
     def configure_optimizers(self):
         if self.args.optimizer == "adam":
@@ -68,7 +107,7 @@ class DiskModule(L.LightningModule):
 
         elif self.args.optimizer == "adamw":
             # dust3r
-            param_groups = misc.get_parameter_groups(self.disk.model, 0.05)
+            param_groups = misc.get_parameter_groups(self.model, 0.05)
             optimizer = optim.AdamW(param_groups, weight_decay=0.05, betas=(0.9, 0.95),lr=1e-4)
         return optimizer
 
@@ -102,8 +141,64 @@ class DiskModule(L.LightningModule):
         optim = self.optimizers()
         optim.zero_grad()
 
-    def forward(self, *args: Any, **kwargs: Any) -> Any:
-        pass
+
+    @dimchecked
+    def _split(self, unet_output: ['B', 'C', 'H', 'W']) \
+                -> (['B', 'C-1', 'H', 'W'], ['B', 1, 'H', 'W']):
+        '''
+        Splits the raw Unet output into descriptors and detection heatmap.
+        '''
+        assert unet_output.shape[1] == self.desc_dim + 1
+
+        descriptors = unet_output[:, :self.desc_dim]
+        heatmap     = unet_output[:, self.desc_dim:]
+
+        return descriptors, heatmap
+
+    @dimchecked
+    def forward(
+        self,
+        images: ['B', '3', 'H', 'W'],
+        true_shapes: ['B', '2'] = None,
+
+    ) -> (['B', 'C', 'H', 'W'], ['B', '1', 'H', 'W']):
+        try:
+            if self.backbone in ["unet", "dust3r"] or true_shapes is None:
+                model_output = self.model(images)
+            else:
+                model_output = self.model(images, true_shapes)
+            descriptors, heatmaps = self._split(model_output)
+        except RuntimeError as e:
+            if 'Trying to downsample' in str(e):
+                msg = ('U-Net failed because the input is of wrong shape. With '
+                       'a n-step U-Net (n == 4 by default), input images have '
+                       'to have height and width as multiples of 2^n (16 by '
+                       'default).')
+                raise RuntimeError(msg) from e
+            else:
+                raise
+        return descriptors, heatmaps
+
+    @dimchecked
+    def extract_features(self, descriptors: ['B', 'C', 'H', 'W'], heatmaps: ['B', '1', 'H', 'W'], kind='rng',
+                         **kwargs) -> NpArray[Features]:
+        """
+            true_shape: real image shape before resizing/padding
+            allowed values for `kind`:
+            * rng
+            * nms
+        """
+        B = descriptors.shape[0]
+        keypoints = {
+            'rng': self.detector.sample,
+            'nms': self.detector.nms,
+        }[kind](heatmaps, **kwargs)
+
+        features = []
+        for i in range(B):
+            features.append(keypoints[i].merge_with_descriptors(descriptors[i]))
+
+        return np.array(features, dtype=object)
 
     def training_step(self, batch, batch_idx):
         bitmaps, images = batch
@@ -116,7 +211,9 @@ class DiskModule(L.LightningModule):
         # extract the features. They are a numpy array of size [2 * batch_size]
         # which contains objects of type disk.common.Features
         true_shapes = torch.stack([image.true_shape for image in images.flat])
-        features_, heatmaps = self.disk.features(bitmaps_, true_shapes, kind='rng')
+        descriptors, heatmaps = self(bitmaps_, true_shapes)
+        features_ = self.extract_features(descriptors, heatmaps, kind='rng')
+
         # reshape them back to [2, batch_size]
         features = features_.reshape(*bitmaps.shape[:2])
         # normally we'd do something like
@@ -133,7 +230,7 @@ class DiskModule(L.LightningModule):
         losses, stats = self.accumulate_grad(images, features)
         if losses is None:  # skip batch
             optim.zero_grad()
-            return torch.nan
+            return
         # Make an optimization step. args.substep is there to allow making bigger
         # "batches" by just accumulating gradient across several of those.
         # Again, this is because the algorithm is so memory hungry it can be
@@ -351,11 +448,16 @@ class DiskModule(L.LightningModule):
         bitmaps_ = bitmaps.reshape(-1, *bitmaps.shape[2:])
         # at validation we use NMS extraction...
         true_shapes = torch.stack([image.true_shape for image in images.flat])
-        features_, heatmaps = self.disk.features(bitmaps_, true_shapes, kind='nms')
+        descriptors, heatmaps = self(bitmaps_, true_shapes)
+        features_ = self.extract_features(descriptors, heatmaps, kind='nms')
         features = features_.reshape(*bitmaps.shape[:2])
 
         # ...and nearest-neighbor matching
-        matches = self.valtime_matcher.match_pairwise(features)
+        try:
+            matches = self.valtime_matcher.match_pairwise(features)
+        except RuntimeError as e:
+            print(e)
+            return
         d_stats = self.disc_quality_metric(images, matches)
         p_stats = self.pose_quality_metric(images, matches)
 
@@ -374,6 +476,8 @@ class DiskModule(L.LightningModule):
         del bitmaps, images, features
 
     def on_validation_epoch_end(self):
+        if len(self.validation_step_outputs) == 0:
+            return
 
         # aggregates metrics/losses from all validation steps
         aggregated = {}

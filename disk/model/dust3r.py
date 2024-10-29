@@ -193,11 +193,9 @@ class DUSt3R(CroCoNet):
         final_output[-1] = tuple(map(self.dec_norm, final_output[-1]))
         return zip(*final_output)
 
-    def _downstream_head(self, head_num, decout, img_shape):
-        B, S, D = decout[-1].shape
-        # img_shape = tuple(map(int, img_shape))
-        head = getattr(self, f'head{head_num}')
-        return head(decout, img_shape)
+    @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
+    def _downstream_head(self, decout, img_shape):
+        return self.head1(decout, img_shape)
 
     @dimchecked
     def forward(self, img1: ['B', 'C', 'H', 'W'], shape1=None, img2=None, shape2=None):
@@ -211,8 +209,7 @@ class DUSt3R(CroCoNet):
         # combine all ref images into object-centric representation
         dec1, dec2 = self._decoder(feat1, pos1, feat2, pos2)
 
-        with torch.cuda.amp.autocast(enabled=False):
-            feat = self._downstream_head(1, [tok.float() for tok in dec1], shape1)
+        feat = self._downstream_head([tok.float() for tok in dec1], shape1)
 
         return feat
 
