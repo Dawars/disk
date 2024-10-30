@@ -110,6 +110,10 @@ def get_opts():
         help='Debug mode',
     )
     parser.add_argument(
+        '--tf32', action=argparse.BooleanOptionalAction,
+        help='Tensor core',
+    )
+    parser.add_argument(
         '--compile', action=argparse.BooleanOptionalAction,
         help='Torch compile model',
     )
