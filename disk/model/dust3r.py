@@ -158,17 +158,15 @@ class DUSt3R(CroCoNet):
         return x, pos, None
 
     def _encode_image_pairs(self, img1, img2, true_shape1, true_shape2):
-        if img2 is None:
-            out, pos, _ = self._encode_image(img1, true_shape1)
-            return out, out, pos, pos
-        if img1.shape[-2:] == img2.shape[-2:]:
-            out, pos, _ = self._encode_image(torch.cat((img1, img2), dim=0),
-                                             torch.cat((true_shape1, true_shape2), dim=0))
-            out, out2 = out.chunk(2, dim=0)
-            pos, pos2 = pos.chunk(2, dim=0)
-        else:
-            out, pos, _ = self._encode_image(img1, true_shape1)
-            out2, pos2, _ = self._encode_image(img2, true_shape2)
+        """Assume that image sizes are the same for compile, etc"""
+        # if img1.shape[-2:] == img2.shape[-2:]:
+        out, pos, _ = self._encode_image(torch.cat((img1, img2), dim=0),
+                                         torch.cat((true_shape1, true_shape2), dim=0))
+        out, out2 = out.chunk(2, dim=0)
+        pos, pos2 = pos.chunk(2, dim=0)
+        # else:
+        #     out, pos, _ = self._encode_image(img1, true_shape1)
+        #     out2, pos2, _ = self._encode_image(img2, true_shape2)
         return out, out2, pos, pos2
 
 
@@ -198,10 +196,37 @@ class DUSt3R(CroCoNet):
         return self.head1(decout, img_shape)
 
     @dimchecked
-    def forward(self, img1: ['B', 'C', 'H', 'W'], shape1=None, img2=None, shape2=None):
+    def forward(self, img1: ['B', 'C', 'H', 'W'], shape1: ['B', '2']):
+        """
+        Ignore shape param for now
+        """
         # encode the two images --> B,S,D
         B = img1.shape[0]
-        shape1 = shape1 if shape1 is not None else  torch.tensor(img1.shape[-2:])[None].repeat(B, 1)
+        shape1 = torch.tensor(img1.shape[-2:])[None].repeat(B, 1)
+
+        # encode img1 only if img2 is None and return output twice
+        feat1, feat2, pos1, pos2 = self._encode_image_pairs(img1, img1, shape1, shape1)
+
+        # combine all ref images into object-centric representation
+        dec1, dec2 = self._decoder(feat1, pos1, feat2, pos2)
+
+        feat = self._downstream_head([tok.float() for tok in dec1], shape1)
+
+        return feat
+
+    @dimchecked
+    def forward_multi(self, img1: ['B', 'C', 'H', 'W'],
+                      shape1: ['B', '2'],
+                      img2: ['B', 'C', 'H', 'W'],
+                      shape2: ['B', '2']):
+        """
+        Forward for cross attention, not used currently
+        Ignore shape param for now
+        """
+        # encode the two images --> B,S,D
+        B = img1.shape[0]
+        shape1 = torch.tensor(img1.shape[-2:])[None].repeat(B, 1)
+        shape2 = torch.tensor(img2.shape[-2:])[None].repeat(B, 1)
 
         # encode img1 only if img2 is None and return output twice
         feat1, feat2, pos1, pos2 = self._encode_image_pairs(img1, img2, shape1, shape2)

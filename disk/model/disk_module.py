@@ -24,7 +24,7 @@ from mickey.lib.models.MicKey.modules.utils.training_utils import vis_inliers, c
 
 class DiskModule(L.LightningModule):
     def __init__(self, args):
-        super().__init__()
+        super(DiskModule, self).__init__()
         # create the feature extractor and descriptor. It does not handle matching,
         # this will come later
         self.desc_dim = args.desc_dim
@@ -159,14 +159,11 @@ class DiskModule(L.LightningModule):
     def forward(
         self,
         images: ['B', '3', 'H', 'W'],
-        true_shapes: ['B', '2'] = None,
+        true_shapes: ['B', '2'],
 
     ) -> (['B', 'C', 'H', 'W'], ['B', '1', 'H', 'W']):
         try:
-            if self.backbone in ["unet", "dust3r"] or true_shapes is None:
-                model_output = self.model(images)
-            else:
-                model_output = self.model(images, true_shapes)
+            model_output = self.model(images, true_shapes)
             descriptors, heatmaps = self._split(model_output)
         except RuntimeError as e:
             if 'Trying to downsample' in str(e):
