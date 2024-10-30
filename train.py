@@ -65,7 +65,7 @@ def train_model(args):
     logger = WandbLogger(project="disk", name=exp_name, id=str(job_id) if valid_slurm_job else None,
                          resume="allow" if valid_slurm_job else "never", config=config_dict)
 
-    if args.num_nodes > 1:
+    if args.num_gpus * args.num_nodes > 1:
         strategy = DDPStrategy(find_unused_parameters=True, precision_plugin=MixedPrecision(precision=args.precision, device="cuda") if args.precision == "16-mixed" else Precision())
     else:
         strategy = "auto"
