@@ -99,7 +99,7 @@ class DiskModule(L.LightningModule):
         self.multi_gpu = self.args.num_gpus * self.args.num_nodes > 1
         self.validation_step_outputs = []
         # torch.autograd.set_detect_anomaly(True)
-        self.example_input_array = torch.rand([1, 3, args.height, args.width])
+        self.example_input_array = torch.rand([1, 3, args.height, args.width]), torch.tensor([[args.height, args.width]])
 
     def configure_optimizers(self):
         if self.args.optimizer == "adam":
@@ -159,10 +159,10 @@ class DiskModule(L.LightningModule):
     def forward(
         self,
         images: ['B', '3', 'H', 'W'],
-        # true_shapes: ['B', '2'] = torch.empty([1, 2]),
+        true_shapes: ['B', '2'],
     ) -> (['B', 'C', 'H', 'W'], ['B', '1', 'H', 'W']):
         try:
-            model_output = self.model(images, None)
+            model_output = self.model(images, true_shapes)
             descriptors, heatmaps = self._split(model_output)
         except RuntimeError as e:
             if 'Trying to downsample' in str(e):
