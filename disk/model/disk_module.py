@@ -159,11 +159,10 @@ class DiskModule(L.LightningModule):
     def forward(
         self,
         images: ['B', '3', 'H', 'W'],
-        true_shapes: ['B', '2'],
-
+        # true_shapes: ['B', '2'] = torch.empty([1, 2]),
     ) -> (['B', 'C', 'H', 'W'], ['B', '1', 'H', 'W']):
         try:
-            model_output = self.model(images, true_shapes)
+            model_output = self.model(images, None)
             descriptors, heatmaps = self._split(model_output)
         except RuntimeError as e:
             if 'Trying to downsample' in str(e):
