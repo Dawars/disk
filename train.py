@@ -73,7 +73,7 @@ def train_model(args):
                          num_nodes=args.num_nodes,
                          strategy=strategy,
                          precision=args.precision,
-                         log_every_n_steps=50, #cfg.TRAINING.LOG_INTERVAL,
+                         log_every_n_steps=50 if args.debug else 500, #cfg.TRAINING.LOG_INTERVAL,
                          val_check_interval=1.0, #cfg.TRAINING.VAL_INTERVAL,
                          limit_val_batches=100,#cfg.TRAINING.VAL_BATCHES,
                          # limit_train_batches=args.chunk_size,
