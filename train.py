@@ -68,7 +68,7 @@ def train_model(args):
                          resume="allow" if valid_slurm_job else "never", config=config_dict)
 
     if args.num_gpus * args.num_nodes > 1:
-        strategy = DDPStrategy(find_unused_parameters=True, precision_plugin=MixedPrecision(precision=args.precision, device="cuda") if args.precision == "16-mixed" else Precision())
+        strategy = DDPStrategy(find_unused_parameters=True, static_graph=True)
     else:
         strategy = "auto"
     trainer = pl.Trainer(devices=args.num_gpus,
