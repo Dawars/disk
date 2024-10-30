@@ -148,7 +148,7 @@ def debug_reward_matches_log(data, gradients, batch_i = 0, num_vis_pts = 30):
 
 
 def create_exp_name(exp_name, args):
-    exp_name += ('_Backbone' + str(args.backbone))
+    exp_name += ('_Backbone_' + str(args.backbone))
     exp_name += ('_freeze_' + str(args.freeze))
     exp_name += ('_w' + str(args.window))
     exp_name += ('_GPU' + str(args.num_gpus*args.num_nodes))
