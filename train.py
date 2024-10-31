@@ -13,7 +13,6 @@ import lightning.pytorch as pl
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.plugins.environments import SLURMEnvironment
 from lightning.pytorch.callbacks import BatchSizeFinder
-from lightning.pytorch.plugins import MixedPrecision, Precision
 from lightning.pytorch.strategies import DDPStrategy
 
 import json
