@@ -32,7 +32,7 @@ class DiskModule(L.LightningModule):
 
         if args.debug:
             logger: WandbLogger = self.logger
-            logger.wandb_logger.watch(self.disk.model)
+            logger.watch(self.disk.model)
         self.args = args
 
         # set up the inference-time matching algorthim and validation metrics
