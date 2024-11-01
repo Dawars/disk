@@ -30,6 +30,9 @@ class DiskModule(L.LightningModule):
         if args.compile:
             self.disk.model = torch.compile(self.disk.model, dynamic=True)
 
+        if self.args.debug:
+            logger: WandbLogger = self.logger
+            logger.wandb_logger.watch(self.disk.model)
         self.args = args
 
         # set up the inference-time matching algorthim and validation metrics
