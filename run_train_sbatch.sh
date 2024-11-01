@@ -4,7 +4,7 @@
 #SBATCH --ntasks-per-node=1   # This needs to match Trainer(devices=...)
 ##SBATCH --time 0-02:00:00
 #SBATCH --job-name=disk
-#SBATCH --output=slurm-%x.%A.out
+#SBATCH --output=logs/slurm-%x.%A.out
 #SBATCH --mem=150GB
 #SBATCH --partition=gpu,gpu-test,vis,vascunet
 #SBATCH --gres=gpu:1
