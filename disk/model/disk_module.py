@@ -26,13 +26,11 @@ class DiskModule(L.LightningModule):
         super(DiskModule, self).__init__()
         # create the feature extractor and descriptor. It does not handle matching,
         # this will come later
+        self.args = args
         self.disk = DISK(args)
         if args.compile:
             self.disk.model = torch.compile(self.disk.model, dynamic=True)
 
-        if args.debug:
-            logger: WandbLogger = self.logger
-            logger.watch(self.disk.model)
         self.args = args
 
         # set up the inference-time matching algorthim and validation metrics
