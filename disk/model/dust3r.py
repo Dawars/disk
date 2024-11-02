@@ -212,7 +212,8 @@ class DUSt3R(CroCoNet):
         # combine all ref images into object-centric representation
         dec1, dec2 = self._decoder(feat1, pos1, feat1, pos1)
 
-        feat = self._downstream_head([tok.float() for tok in dec1], shape1)
+        with torch.cuda.amp.autocast(enabled=False):
+            feat = self._downstream_head([tok.float() for tok in dec1], shape1)
 
         return feat
 
