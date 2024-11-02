@@ -207,10 +207,10 @@ class DUSt3R(CroCoNet):
         shape1 = torch.tensor(img1.shape[-2:])[None].repeat(B, 1)
 
         # encode img1 only if img2 is None and return output twice
-        feat1, feat2, pos1, pos2 = self._encode_image_pairs(img1, img1, shape1, shape1)
+        feat1, pos1, _ = self._encode_image(img1, shape1)
 
         # combine all ref images into object-centric representation
-        dec1, dec2 = self._decoder(feat1, pos1, feat2, pos2)
+        dec1, dec2 = self._decoder(feat1, pos1, feat1, pos1)
 
         feat = self._downstream_head([tok.float() for tok in dec1], shape1)
 
