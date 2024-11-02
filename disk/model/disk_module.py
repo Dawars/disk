@@ -54,14 +54,30 @@ class DiskModule(L.LightningModule):
 
         # Logger parameters
         self.log_store_ims = True
-        self.log_interval = 50  # cfg.TRAINING.LOG_INTERVAL
+        self.log_interval = 50 if self.args.debug else 500 # cfg.TRAINING.LOG_INTERVAL
 
         # Lightning configurations
         self.automatic_optimization = False # This property activates manual optimization.
         self.multi_gpu = self.args.num_gpus * self.args.num_nodes > 1
         self.validation_step_outputs = []
-        # torch.autograd.set_detect_anomaly(True)
+        if self.debug:
+            torch.autograd.set_detect_anomaly(True)
         self.example_input_array = torch.rand([1, 3, args.height, args.width]), torch.tensor([[args.height, args.width]])
+
+    # def on_after_backward(self):
+    #     global_step = self.global_step
+    #     if self.debug:
+    #         logger: WandbLogger = self.logger
+    #         if self.global_step % self.log_interval == 0:
+    #             for name, param in self.model.named_parameters():
+    #                 logger.add_histogram(name, param, global_step)
+    #                 if param.requires_grad:
+    #                     logger.add_histogram(f"{name}_grad", param.grad, global_step)
+
+    def on_train_start(self):
+        if self.debug:
+            logger: WandbLogger = self.logger
+            logger.watch(self.disk.model)
 
     def configure_optimizers(self):
         if self.args.optimizer == "adam":
@@ -124,6 +140,9 @@ class DiskModule(L.LightningModule):
         return descriptors, heatmaps
 
     def training_step(self, batch, batch_idx):
+        if self.debug:
+            print(f"Training step {batch_idx=} on {self.global_rank} {self.local_rank}")
+
         bitmaps, images = batch
         # todo add curriculum learning
         # some reshaping because the image pairs are shaped like
@@ -151,9 +170,20 @@ class DiskModule(L.LightningModule):
         sch = self.lr_schedulers()
 
         losses, stats = self.accumulate_grad(images, features)
+
+        # add gradient clipping after backward to avoid gradient exploding
+        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=5)
+
+        # check if the gradients of the training parameters contain nan values
+        nans = sum([torch.isnan(param.grad).any() for param in list(self.parameters()) if param.grad is not None])
+        if nans != 0:
+            optim.zero_grad()
+            print(f"parameter gradients includes {nans} nan values on {self.global_rank} {self.local_rank}")
+            return
+
         if losses is None:  # skip batch
             optim.zero_grad()
-            print(f"Skipping batch {batch_idx} on {self.global_rank}")
+            print(f"Skipping batch {batch_idx} on {self.global_rank} {self.local_rank}")
             return
         # Make an optimization step. args.substep is there to allow making bigger
         # "batches" by just accumulating gradient across several of those.
