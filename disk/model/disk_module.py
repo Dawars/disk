@@ -32,7 +32,7 @@ class DiskModule(L.LightningModule):
             self.disk.model = torch.compile(self.disk.model, dynamic=True)
 
         self.args = args
-
+        self.debug = args.debug
         # set up the inference-time matching algorthim and validation metrics
         self.valtime_matcher = CycleMatcher()
         self.pose_quality_metric = PoseQuality()
@@ -380,7 +380,14 @@ class DiskModule(L.LightningModule):
                     i_decision += 1
 
         # add gradient clipping after backward to avoid gradient exploding
-        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=5)
+        torch.nn.utils.clip_grad_norm_(detached_features.flat, max_norm=5)
+
+        # check if the gradients of the training parameters contain nan values
+        nans = sum([torch.isnan(param.grad).any() for param in list(detached_features.flat) if param.grad is not None])
+        if nans != 0:
+            print("detached_features  gradients includes {} nan values".format(nans))
+            return None, None
+
 
         # here we "reattach" `detached_features` to the original `features`.
         # `torch.autograd.backward(leaves, grads)` API requires that we have
@@ -431,6 +438,7 @@ class DiskModule(L.LightningModule):
 
     def on_validation_epoch_end(self):
         if len(self.validation_step_outputs) == 0:
+            self.log("val/discrete/precision", 0)  # log something for model checkpoint callback
             return
 
         # aggregates metrics/losses from all validation steps
