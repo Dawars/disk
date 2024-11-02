@@ -77,7 +77,7 @@ class DiskModule(L.LightningModule):
     def on_train_start(self):
         if self.debug:
             logger: WandbLogger = self.logger
-            logger.watch(self.disk.model)
+            logger.watch(self.disk.model, log="all")
 
     def configure_optimizers(self):
         if self.args.optimizer == "adam":
@@ -380,10 +380,11 @@ class DiskModule(L.LightningModule):
                     i_decision += 1
 
         # add gradient clipping after backward to avoid gradient exploding
-        torch.nn.utils.clip_grad_norm_(detached_features.flat, max_norm=5)
+        params_with_grad = [param for feat in detached_features.flat for param in feat.grad_tensors()]
+        torch.nn.utils.clip_grad_norm_(params_with_grad, max_norm=5)
 
         # check if the gradients of the training parameters contain nan values
-        nans = sum([torch.isnan(param.grad).any() for param in list(detached_features.flat) if param.grad is not None])
+        nans = sum([torch.isnan(param.grad).any() for param in params_with_grad if param.grad is not None])
         if nans != 0:
             print("detached_features  gradients includes {} nan values".format(nans))
             return None, None

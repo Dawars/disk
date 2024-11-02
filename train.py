@@ -87,7 +87,7 @@ def train_model(args):
                          num_sanity_val_steps=1,
                          # gradient_clip_val=0.,
                          plugins=SLURMEnvironment(requeue_signal=signal.SIGHUP, auto_requeue=False),
-                         enable_progress_bar=not valid_slurm_job,
+                         enable_progress_bar=not valid_slurm_job or args.debug,
                          )
 
     datamodule_end = DataModuleTraining(args, args.batch_size)
