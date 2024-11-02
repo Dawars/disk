@@ -119,11 +119,8 @@ class DiskModule(L.LightningModule):
         optim = self.optimizers()
         optim.zero_grad()
 
-    def forward(self, *args: Any, **kwargs: Any) -> Any:
-        pass
-
     @dimchecked
-    def features(
+    def forward(
         self,
         images: ['B', '3', 'H', 'W'],
         true_shapes: ['B', '2'],
@@ -156,7 +153,7 @@ class DiskModule(L.LightningModule):
         # extract the features. They are a numpy array of size [2 * batch_size]
         # which contains objects of type disk.common.Features
         true_shapes = torch.stack([image.true_shape for image in images.flat])
-        descriptors, heatmaps = self.features(bitmaps_, true_shapes)
+        descriptors, heatmaps = self(bitmaps_, true_shapes)
         features_ = self.disk.extract_features(descriptors, heatmaps, kind='rng')
 
         # reshape them back to [2, batch_size]
@@ -413,7 +410,7 @@ class DiskModule(L.LightningModule):
         bitmaps_ = bitmaps.reshape(-1, *bitmaps.shape[2:])
         # at validation we use NMS extraction...
         true_shapes = torch.stack([image.true_shape for image in images.flat])
-        descriptors, heatmaps = self.features(bitmaps_, true_shapes)
+        descriptors, heatmaps = self(bitmaps_, true_shapes)
         features_ = self.disk.extract_features(descriptors, heatmaps, kind='nms')
         features = features_.reshape(*bitmaps.shape[:2])
 
