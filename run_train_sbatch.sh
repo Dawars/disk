@@ -19,5 +19,5 @@ set -x -e
 export PYTHONPATH="$PROJECTS_PATH/disk:$PROJECTS_PATH:$PROJECTS_PATH/mast3r"
 
 # colmap_py3.10-torch2.3.1-cu12.1.sif colmap_py3.10-torch2.5.0-cu12.4.sif
-srun singularity exec --nv  -B $DISK_OUT_PATH,$DISK_DATA_PATH $DOCKER_IMAGE_PATH/colmap_py3.10-torch2.5.0-cu12.4.sif \
+srun singularity exec --nv  -B $DISK_OUT_PATH,$DISK_DATA_PATH,$WEIGHTS_PATH $DOCKER_IMAGE_PATH/colmap_py3.10-torch2.5.0-cu12.4.sif \
 python train.py $DISK_DATA_PATH --save-dir $DISK_OUT_PATH  $@
