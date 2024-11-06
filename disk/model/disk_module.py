@@ -439,7 +439,8 @@ class DiskModule(L.LightningModule):
 
     def on_validation_epoch_end(self):
         if len(self.validation_step_outputs) == 0:
-            self.log("val/discrete/precision", 0)  # log something for model checkpoint callback
+            print(f"val logging 'val/discrete/precision' {0}")
+            self.log("val/discrete/precision", 0, sync_dist=self.multi_gpu, rank_zero_only=True)  # log something for model checkpoint callback
             return
 
         # aggregates metrics/losses from all validation steps
@@ -447,6 +448,7 @@ class DiskModule(L.LightningModule):
         for key in self.validation_step_outputs[0].keys():
             aggregated[key] = torch.stack([torch.tensor(x[key]) for x in self.validation_step_outputs])
         for key, value in aggregated.items():
+            print(f"val logging {key} {value.float().mean()}")
             self.log(key, value.float().mean(), sync_dist=self.multi_gpu, rank_zero_only=True)
 
         self.validation_step_outputs.clear()  # free memory
