@@ -46,7 +46,7 @@ class DISK(torch.nn.Module):
                                 desc_dim=self.desc_dim)  # positional embedding (either cosine or RoPE100))
             print(f"Loading weight from {args.pretrained_weight}")
             ckpt = torch.load(os.path.expandvars(args.pretrained_weight), map_location='cpu', weights_only=False)
-            ckpt = {k: v for k, v in ckpt['model'].items() if not k.startswith("downstream_head1")}
+            ckpt['model'] = {k: v for k, v in ckpt['model'].items() if not k.startswith("downstream_head1")}
 
             s = self.model.load_state_dict(ckpt['model'], strict=False)
             print("Croco weights loaded", s)
