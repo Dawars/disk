@@ -44,11 +44,9 @@ class DISK(torch.nn.Module):
                                 dec_num_heads=12,
                                 landscape_only=False,
                                 desc_dim=self.desc_dim)  # positional embedding (either cosine or RoPE100))
-            taskId = int(os.getenv('SLURM_ARRAY_JOB_ID', 0))
-            if taskId == 0:
-                ckpt = torch.load("CroCo_V2_ViTLarge_BaseDecoder.pth", map_location='cpu')
-                s = self.model.load_state_dict(ckpt['model'], strict=False)
-                print("Croco weights loaded", s)
+            ckpt = torch.load(os.path.expandvars("$WEIGHTS_PATH/CroCo_V2_ViTLarge_BaseDecoder.pth"), map_location='cpu')
+            s = self.model.load_state_dict(ckpt['model'], strict=False)
+            print("Croco weights loaded", s)
         elif self.backbone == "mickey":
             from disk.model.mickey import MicKey
             self.model = MicKey()
