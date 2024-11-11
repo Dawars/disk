@@ -101,18 +101,15 @@ class DiskModule(L.LightningModule):
         # short, and is controllable by the --warmup switch (default 250)
         if self.global_step < self.args.warmup:
             ramp = 0.
-        elif e < 1:
-            ramp = 0.1
         else:
-            ramp = min(1., 0.1 + 0.2 * e)
-        if self.global_step % self.log_interval == 0:
-            self.log("train/ramp", ramp, batch_size=len(bitmaps))
+            ramp = 0.001
+        self.log("train/ramp", ramp, batch_size=len(bitmaps))
         self.reward_fn = self.reward_class(
             lm_tp=1.,
             lm_fp=-0.25 * ramp,
             th=1.5,
         )
-        self.lm_kp = 0.  # -0.001 * ramp
+        self.lm_kp = -0.001 * ramp
 
     def on_train_epoch_start(self):
         # reset optimizer during epochs just in case
