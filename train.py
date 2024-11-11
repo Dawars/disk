@@ -36,6 +36,7 @@ def train_model(args):
     taskId = os.getenv('SLURM_ARRAY_JOB_ID')
     job_id = int(taskId) if taskId else int(jobId )
     valid_slurm_job = job_id > -1
+    print(f"{jobId=} {taskId=} {job_id=} {valid_slurm_job=}")
     ckpt_dir: Path = args.save_dir / exp_name / str(job_id)
     ckpt_dir.mkdir(exist_ok=True, parents=True)
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
