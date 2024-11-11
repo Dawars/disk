@@ -112,7 +112,7 @@ class DiskModule(L.LightningModule):
             lm_fp=-0.25 * ramp,
             th=1.5,
         )
-        self.lm_kp = -0.001 * ramp
+        self.lm_kp = 0.  # -0.001 * ramp
 
     def on_train_epoch_start(self):
         # reset optimizer during epochs just in case
