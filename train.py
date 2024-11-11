@@ -64,7 +64,7 @@ def train_model(args):
     (ckpt_dir / "config.json").write_text(json.dumps(config_dict, indent=4, ensure_ascii=False))
 
     logger = WandbLogger(project="disk", name=exp_name, id=str(job_id) if valid_slurm_job else None,
-                         resume="allow" if valid_slurm_job else "never", config=config_dict)
+                         resume="allow" if valid_slurm_job else "never", config=config_dict, log_dir=args.save_dir / "wandb")
 
     if args.num_gpus * args.num_nodes > 1:
         strategy = DDPStrategy(find_unused_parameters=True, static_graph=True)
