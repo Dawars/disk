@@ -110,6 +110,10 @@ def get_opts():
         help='Path to pretrained model weight to load',
     )
     parser.add_argument(
+        '--penalty', type=float, default=1e-1,
+        help='Penalty value to ramp up from',
+    )
+    parser.add_argument(
         '--debug', action=argparse.BooleanOptionalAction,
         help='Debug mode',
     )

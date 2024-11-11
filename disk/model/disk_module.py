@@ -102,7 +102,7 @@ class DiskModule(L.LightningModule):
         if self.global_step < self.args.warmup:
             ramp = 0.
         else:
-            ramp = 0.001
+            ramp = self.args.penalty
         self.log("train/ramp", ramp, batch_size=len(bitmaps))
         self.reward_fn = self.reward_class(
             lm_tp=1.,
