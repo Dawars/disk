@@ -44,7 +44,8 @@ class DISK(torch.nn.Module):
                                 dec_num_heads=12,
                                 landscape_only=False,
                                 desc_dim=self.desc_dim)  # positional embedding (either cosine or RoPE100))
-            ckpt = torch.load(os.path.expandvars("$WEIGHTS_PATH/CroCo_V2_ViTLarge_BaseDecoder.pth"), map_location='cpu')
+            print(f"Loading weight from {args.pretrained_weight}")
+            ckpt = torch.load(os.path.expandvars(args.pretrained_weight), map_location='cpu')
             s = self.model.load_state_dict(ckpt['model'], strict=False)
             print("Croco weights loaded", s)
         elif self.backbone == "mickey":

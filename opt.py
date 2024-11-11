@@ -106,6 +106,10 @@ def get_opts():
         help='Path to a checkpoint to resume training from',
     )
     parser.add_argument(
+        '--pretrained-weight', type=str, default=None,
+        help='Path to pretrained model weight to load',
+    )
+    parser.add_argument(
         '--debug', action=argparse.BooleanOptionalAction,
         help='Debug mode',
     )
