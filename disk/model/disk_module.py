@@ -99,7 +99,7 @@ class DiskModule(L.LightningModule):
         # Therefore in the first couple of epochs I start with very low (0)
         # penalty and then gradually increase it. The very first epoch can be
         # short, and is controllable by the --warmup switch (default 250)
-        ramp = max(0., min(1., self.args.penalty * (self.global_step - self.args.warmup) / 5_000))
+        ramp = max(0., min(1., self.args.penalty + (self.global_step - self.args.warmup) / 5_000))
         self.log("train/ramp", ramp, batch_size=len(bitmaps))
         self.reward_fn = self.reward_class(
             lm_tp=1.,
