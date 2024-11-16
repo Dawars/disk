@@ -166,6 +166,11 @@ class DiskModule(L.LightningModule):
         sch = self.lr_schedulers()
 
         losses, stats = self.accumulate_grad(images, features)
+        if losses is None:  # skip batch
+            # optim.zero_grad()  # maybe we need to optimize the prev substep to get out of a failure case
+            optimize = True
+            print(f"Skipping batch {batch_idx} on {self.global_rank} {self.local_rank}")
+            return
 
         # add gradient clipping after backward to avoid gradient exploding
         torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=5)
@@ -177,17 +182,11 @@ class DiskModule(L.LightningModule):
             print(f"parameter gradients includes {nans} nan values on {self.global_rank} {self.local_rank}")
             return
 
-
         # Make an optimization step. args.substep is there to allow making bigger
         # "batches" by just accumulating gradient across several of those.
         # Again, this is because the algorithm is so memory hungry it can be
         # an issue to have batches bigger than 1.
         optimize = (batch_idx + 1) % self.args.substep == 0
-        if losses is None:  # skip batch
-            # optim.zero_grad()  # maybe we need to optimize the prev substep to get out of a failure case
-            optimize = True
-            print(f"Skipping batch {batch_idx} on {self.global_rank} {self.local_rank}")
-            return
         if optimize:
             optim.step()
             if sch is not None:
