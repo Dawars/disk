@@ -376,7 +376,7 @@ class DiskModule(L.LightningModule):
                     # todo subtract baseline
                     # this .backward() will accumulate in `detached_features`
                     if self.debug:
-                        print(f"[rank{self.global_rank}][step{self.global_step}] {loss} at {i_scene=} pair {i_image1}-{i_image2}}")
+                        print(f"[rank{self.global_rank}][step{self.global_step}] {loss} at {i_scene=} pair {i_image1}-{i_image2}")
                     self.manual_backward(loss)
 
                     stats[i_scene, i_decision] = stats_
