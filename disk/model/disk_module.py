@@ -148,8 +148,10 @@ class DiskModule(L.LightningModule):
         # which contains objects of type disk.common.Features
         true_shapes = torch.stack([image.true_shape for image in images.flat])
         descriptors, heatmaps = self(bitmaps_, true_shapes)
+        print(f"Extracting features [{self.global_step}]")
         features_ = self.disk.extract_features(descriptors, heatmaps, kind='rng')
-
+        for i, feat in enumerate(features_.flat):
+            print(i, feat.desc)
         # reshape them back to [2, batch_size]
         features = features_.reshape(*bitmaps.shape[:2])
         # normally we'd do something like

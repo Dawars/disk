@@ -88,6 +88,8 @@ class DISK(torch.nn.Module):
 
         features = []
         for i in range(B):
+            print(f"{i} logp", keypoints[i].logp)
+            print(f"{i} xys", keypoints[i].xys)
             features.append(keypoints[i].merge_with_descriptors(descriptors[i]))
 
         return np.array(features, dtype=object)
