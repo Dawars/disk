@@ -384,6 +384,7 @@ class DiskModule(L.LightningModule):
                         print(f"{features1.grad_tensors()}")
                         print(f"{features2.grad_tensors()}")
                         if features1.desc is None:
+                            print("features1.desc")
                             print(features1.kp)
                             print(features1)
                     stats[i_scene, i_decision] = stats_
@@ -417,7 +418,10 @@ class DiskModule(L.LightningModule):
             grads.extend([t.grad for t in detached_feat.grad_tensors()])
 
         if self.debug:
-            print(f"[rank{self.global_rank}][step{self.global_step}] {success.sum()=} {len(leaves)=}", leaves, grads)
+            print(f"[rank{self.global_rank}][step{self.global_step}] {success.sum()=} {len(leaves)=}")
+            print(leaves)
+            print(grads)
+            print(success)
         # finally propagate the gradients down to the network
         torch.autograd.backward(leaves, grads)
 
