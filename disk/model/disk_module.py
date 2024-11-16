@@ -363,7 +363,7 @@ class DiskModule(L.LightningModule):
                     features2 = scene_features[i_image2]
 
                     if len(features1.desc) == 0 or len(features2.desc) == 0:
-                        print(f"Feature is empty, skipping pair {i_image1}-{i_image2} in scene {i_scene} {len(features1.desc)=} {len(features2.desc)=}")
+                        print(f"Feature is empty, skipping pair {i_image1}-{i_image2} in scene {i_scene} {len(features1.desc)=} {len(features2.desc)=} on {self.global_rank} {self.local_rank}")
                         success[i_scene, i_decision] = False
                         i_decision += 1
                         continue
@@ -375,6 +375,7 @@ class DiskModule(L.LightningModule):
                     loss, stats_ = self._loss_for_pair(match_dist, image1, image2)
                     # todo subtract baseline
                     # this .backward() will accumulate in `detached_features`
+                    print(f"[rank{self.global_rank}] {loss}")
                     self.manual_backward(loss)
 
                     stats[i_scene, i_decision] = stats_
