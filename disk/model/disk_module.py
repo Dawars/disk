@@ -409,6 +409,8 @@ class DiskModule(L.LightningModule):
             leaves.extend(feat.grad_tensors())
             grads.extend([t.grad for t in detached_feat.grad_tensors()])
 
+        if self.debug:
+            print(f"[rank{self.global_rank}][step{self.global_step}] {success.sum()=} {len(leaves)=}", leaves, grads)
         # finally propagate the gradients down to the network
         torch.autograd.backward(leaves, grads)
 
