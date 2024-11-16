@@ -345,6 +345,8 @@ class DiskModule(L.LightningModule):
         # gradients across pairwise matches.
         detached_features = np.zeros(features.shape, dtype=object)
         for i in range(features.size):
+            if self.debug:
+                print(f"feature{i}", features.flat[i].desc)
             detached_features.flat[i] = features.flat[i].detached_and_grad_()
 
         # we process each scene in batch independently
@@ -356,11 +358,11 @@ class DiskModule(L.LightningModule):
             # (N_per_scene choose 2) image pairs
             for i_image1 in range(N_per_scene):
                 image1 = scene_images[i_image1]
-                features1 = scene_features[i_image1]
+                features1: Features = scene_features[i_image1]
 
                 for i_image2 in range(i_image1 + 1, N_per_scene):
                     image2 = scene_images[i_image2]
-                    features2 = scene_features[i_image2]
+                    features2: Features = scene_features[i_image2]
 
                     if len(features1.desc) == 0 or len(features2.desc) == 0:
                         print(f"Feature is empty, skipping pair {i_image1}-{i_image2} in scene {i_scene} {len(features1.desc)=} {len(features2.desc)=} on {self.global_rank} {self.local_rank}")
@@ -378,7 +380,12 @@ class DiskModule(L.LightningModule):
                     if self.debug:
                         print(f"[rank{self.global_rank}][step{self.global_step}] {loss} at {i_scene=} pair {i_image1}-{i_image2}")
                     self.manual_backward(loss)
-
+                    if self.debug:
+                        print(f"{features1.grad_tensors()}")
+                        print(f"{features2.grad_tensors()}")
+                        if features1.desc is None:
+                            print(features1.kp)
+                            print(features1)
                     stats[i_scene, i_decision] = stats_
                     losses.append(loss)
                     success[i_scene, i_decision] = True
