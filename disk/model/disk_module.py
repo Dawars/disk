@@ -175,15 +175,17 @@ class DiskModule(L.LightningModule):
             print(f"parameter gradients includes {nans} nan values on {self.global_rank} {self.local_rank}")
             return
 
-        if losses is None:  # skip batch
-            optim.zero_grad()
-            print(f"Skipping batch {batch_idx} on {self.global_rank} {self.local_rank}")
-            return
+
         # Make an optimization step. args.substep is there to allow making bigger
         # "batches" by just accumulating gradient across several of those.
         # Again, this is because the algorithm is so memory hungry it can be
         # an issue to have batches bigger than 1.
         optimize = (batch_idx + 1) % self.args.substep == 0
+        if losses is None:  # skip batch
+            # optim.zero_grad()  # maybe we need to optimize the prev substep to get out of a failure case
+            optimize = True
+            print(f"Skipping batch {batch_idx} on {self.global_rank} {self.local_rank}")
+            return
         if optimize:
             optim.step()
             if sch is not None:
@@ -192,6 +194,8 @@ class DiskModule(L.LightningModule):
 
         aggregated_stats = defaultdict(list)
         for sample in stats.flat:
+            if not isinstance(sample, dict):
+                continue
             for key, value in sample.items():
                 aggregated_stats[key].append(value)
         for key, value in aggregated_stats.items():
@@ -332,6 +336,7 @@ class DiskModule(L.LightningModule):
         N_decisions           = ((N_per_scene - 1) * N_per_scene) // 2
 
         stats = np.zeros((N_scenes, N_decisions), dtype=object)
+        success = np.zeros((N_scenes, N_decisions), dtype=object)
         losses = []
 
         # we detach features from the computation graph, so that when we call
@@ -358,8 +363,11 @@ class DiskModule(L.LightningModule):
                     features2 = scene_features[i_image2]
 
                     if len(features1.desc) == 0 or len(features2.desc) == 0:
-                        print(f"Feature is empty, skipping batch {len(features1.desc)=} {len(features2.desc)=}")
-                        return None, None
+                        print(f"Feature is empty, skipping pair {i_image1}-{i_image2} in scene {i_scene} {len(features1.desc)=} {len(features2.desc)=}")
+                        success[i_scene, i_decision] = False
+                        i_decision += 1
+                        continue
+                        # return None, None
 
                     # establish the match distribution and calculate the
                     # gradient estimator
@@ -371,8 +379,11 @@ class DiskModule(L.LightningModule):
 
                     stats[i_scene, i_decision] = stats_
                     losses.append(loss)
+                    success[i_scene, i_decision] = True
                     i_decision += 1
-
+        # no successful image pair
+        if success.sum() == 0:
+            return None, None
         # add gradient clipping after backward to avoid gradient exploding
         params_with_grad = [param for feat in detached_features.flat for param in feat.grad_tensors()]
         torch.nn.utils.clip_grad_norm_(params_with_grad, max_norm=5)
@@ -390,7 +401,9 @@ class DiskModule(L.LightningModule):
         # we have a corresponding gradient tensor in `grads`
         leaves = []
         grads = []
-        for feat, detached_feat in zip(features.flat, detached_features.flat):
+        for feat, detached_feat, is_success in zip(features.flat, detached_features.flat, success.flat):
+            if not is_success:
+                continue
             leaves.extend(feat.grad_tensors())
             grads.extend([t.grad for t in detached_feat.grad_tensors()])
 
