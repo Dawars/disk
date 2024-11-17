@@ -241,7 +241,7 @@ class DiskModule(L.LightningModule):
 
             features1: Features = features[batch_id, 0]
             features2: Features = features[batch_id, 1]
-            features3: Features = features[batch_id, 3]
+            features3: Features = features[batch_id, 2]
             match_dist01 = self.matcher.match_pair(features1, features2, self.current_epoch)
             match_dist12 = self.matcher.match_pair(features2, features3, self.current_epoch)
             match_dist02 = self.matcher.match_pair(features1, features3, self.current_epoch)
