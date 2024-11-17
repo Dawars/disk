@@ -81,12 +81,12 @@ class DiskModule(L.LightningModule):
 
     def configure_optimizers(self):
         if self.args.optimizer == "adam":
-            optimizer = optim.Adam(self.parameters(), lr=1e-4)
+            optimizer = optim.Adam(self.parameters(), lr=self.args.lr)
 
         elif self.args.optimizer == "adamw":
             # dust3r
             param_groups = misc.get_parameter_groups(self.disk.model, 0.05)
-            optimizer = optim.AdamW(param_groups, weight_decay=0.05, betas=(0.9, 0.95),lr=1e-4)
+            optimizer = optim.AdamW(param_groups, weight_decay=0.05, betas=(0.9, 0.95),lr=self.args.lr)
         return optimizer
 
     def on_train_batch_start(self, batch: Any, batch_idx: int):

@@ -47,6 +47,10 @@ def get_opts():
         help='Optimizer'
     )
     parser.add_argument(
+        '--lr', type=float, default=1e-4,
+        help='Learning rate'
+    )
+    parser.add_argument(
         '--save-dir', type=Path, default='artifacts',
         help=('Path for saving artifacts (checkpoints and tensorboard logs). Will '
               'be created if doesn\'t exist')
