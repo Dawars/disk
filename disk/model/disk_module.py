@@ -237,13 +237,30 @@ class DiskModule(L.LightningModule):
                 logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.global_step)
             else:
                 print("No inliers")
-            heatmap_vis1 = colorize(heatmaps[batch_id], cmap='viridis')
-            heatmap_vis2 = colorize(heatmaps[batch_id+1], cmap='viridis')
+
+
             features1: Features = features[batch_id, 0]
             features2: Features = features[batch_id, 1]
-            match_dist = self.matcher.match_pair(features1, features2, self.current_epoch)
+            features3: Features = features[batch_id, 3]
+            match_dist01 = self.matcher.match_pair(features1, features2, self.current_epoch)
+            match_dist12 = self.matcher.match_pair(features2, features3, self.current_epoch)
+            match_dist02 = self.matcher.match_pair(features1, features3, self.current_epoch)
 
-            im_matches, sc_map0, sc_map1, depth_map0, depth_map1 = log_image_matches(match_dist,
+            im_matches, sc_map0, sc_map1, depth_map0, depth_map1 = log_image_matches(match_dist01,
+                                                                                     batch,
+                                                                                     features,
+                                                                                     train_depth=False,
+                                                                                     batch_i=batch_id,
+                                                                                     sc_temp=1
+                                                                                    )
+            im_matches12, sc_map1, sc_map2, depth_map1, depth_map2 = log_image_matches(match_dist12,
+                                                                                     batch,
+                                                                                     features,
+                                                                                     train_depth=False,
+                                                                                     batch_i=batch_id,
+                                                                                     sc_temp=1
+                                                                                    )
+            im_matches02, sc_map0, sc_map2, depth_map0, depth_map2 = log_image_matches(match_dist02,
                                                                                      batch,
                                                                                      features,
                                                                                      train_depth=False,
@@ -251,11 +268,12 @@ class DiskModule(L.LightningModule):
                                                                                      sc_temp=1
                                                                                     )
 
-            logger.log_image(key='training_matching/scores0', images=[heatmap_vis1], step=self.global_step)
-            logger.log_image(key='training_matching/scores1', images=[heatmap_vis2], step=self.global_step)
-            logger.log_image(key='training_matching/best_matches_desc', images=[im_matches], step=self.global_step)
-            logger.log_image(key='training_scores/map0', images=[sc_map0], step=self.global_step)
-            logger.log_image(key='training_scores/map1', images=[sc_map1], step=self.global_step)
+            logger.log_image(key="training_matching/scores",
+                             images=[colorize(heatmaps[batch_id*3+i], cmap='viridis') for i in range(3)],
+                             caption=list(range(3)),
+                             step=self.global_step)
+            logger.log_image(key='training_matching/best_matches_desc', images=[im_matches, im_matches02, im_matches12], step=self.global_step)
+            logger.log_image(key='training_scores/map0', images=[sc_map0, sc_map1, sc_map2], step=self.global_step)
             # logger.log_image(key='training_depth/map0', images=[depth_map0[0]], step=self.global_step)
             # logger.log_image(key='training_depth/map1', images=[depth_map1[0]], step=self.global_step)
             # if training_step_ok:
