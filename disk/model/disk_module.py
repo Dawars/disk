@@ -213,6 +213,7 @@ class DiskModule(L.LightningModule):
 
     def logging_step(self, batch, avg_loss, features, heatmaps):
         self.log("train/loss", avg_loss.detach(), batch_size=len(batch[0]))
+        logger: WandbLogger = self.logger
 
         if self.global_step % self.log_interval == 0 and self.log_store_ims:
             batch_id = 0
@@ -224,58 +225,56 @@ class DiskModule(L.LightningModule):
                 "image0": bitmaps[:, 0],
                 "image1": bitmaps[:, 1],
             }
-            matches = self.valtime_matcher.match_pairwise(features)
-            relpose = self.pose_quality_metric(images, matches)
-            matched_pairs: MatchedPairs = matches[batch_id, 0]
-            logger: WandbLogger = self.logger
 
-            inlier_match_indices = relpose[batch_id, 0]["inlier_mask"]
-            if len(inlier_match_indices) > 0:
-                inliers_list_ours = torch.cat([matched_pairs.kps1[matched_pairs.matches[0, inlier_match_indices]],
-                                           matched_pairs.kps2[matched_pairs.matches[1, inlier_match_indices]]], dim=-1)
-                im_inliers = vis_inliers([inliers_list_ours], im_batch, batch_i=batch_id, norm_color=False)
-                logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.global_step)
-            else:
-                print("No inliers")
-
-
-            features1: Features = features[batch_id, 0]
-            features2: Features = features[batch_id, 1]
-            features3: Features = features[batch_id, 2]
-            match_dist01 = self.matcher.match_pair(features1, features2, self.current_epoch)
-            match_dist12 = self.matcher.match_pair(features2, features3, self.current_epoch)
-            match_dist02 = self.matcher.match_pair(features1, features3, self.current_epoch)
-
-            im_matches, sc_map0, sc_map1, depth_map0, depth_map1 = log_image_matches(match_dist01,
-                                                                                     batch,
-                                                                                     features,
-                                                                                     train_depth=False,
-                                                                                     batch_i=batch_id,
-                                                                                     sc_temp=1
-                                                                                    )
-            im_matches12, sc_map1, sc_map2, depth_map1, depth_map2 = log_image_matches(match_dist12,
-                                                                                     batch,
-                                                                                     features,
-                                                                                     train_depth=False,
-                                                                                     batch_i=batch_id,
-                                                                                     sc_temp=1
-                                                                                    )
-            im_matches02, sc_map0, sc_map2, depth_map0, depth_map2 = log_image_matches(match_dist02,
-                                                                                     batch,
-                                                                                     features,
-                                                                                     train_depth=False,
-                                                                                     batch_i=batch_id,
-                                                                                     sc_temp=1
-                                                                                    )
+            pairs = [[0, 1], [0, 2], [1, 2]]
+            keypoints_vis = {}
+            matches_vis = {}
+            for i, j in pairs:
+                features1: Features = features[batch_id, i]
+                features2: Features = features[batch_id, j]
+                if len(features1.desc) == 0 or len(features2.desc) == 0:
+                    continue
+                match_dist = self.matcher.match_pair(features1, features2, self.current_epoch)
+                im_matches, sc_map0, sc_map1, depth_map0, depth_map1 = log_image_matches(match_dist,
+                                                                                         (bitmaps[:, [i, j]], images[:, [i, j]]),
+                                                                                         features[:, [i, j]],
+                                                                                         train_depth=False,
+                                                                                         batch_i=batch_id,
+                                                                                         sc_temp=1
+                                                                                        )
+                keypoints_vis[i] = sc_map0
+                keypoints_vis[j] = sc_map1
+                matches_vis[(i, j)] = im_matches
 
             logger.log_image(key="training_matching/scores",
                              images=[colorize(heatmaps[batch_id*3+i], cmap='viridis') for i in range(3)],
                              caption=list(range(3)),
                              step=self.global_step)
-            logger.log_image(key='training_matching/best_matches_desc', images=[im_matches, im_matches02, im_matches12], step=self.global_step)
-            logger.log_image(key='training_scores/map0', images=[sc_map0, sc_map1, sc_map2], step=self.global_step)
+            logger.log_image(key='training_matching/best_matches_desc',
+                             images=list(matches_vis.values()),
+                             caption=list(matches_vis.keys()),
+                             step=self.global_step)
+            logger.log_image(key='training_scores/map0',
+                             images=list(keypoints_vis.values()),
+                             caption=list(keypoints_vis.keys()),
+                                         step=self.global_step)
             # logger.log_image(key='training_depth/map0', images=[depth_map0[0]], step=self.global_step)
             # logger.log_image(key='training_depth/map1', images=[depth_map1[0]], step=self.global_step)
+
+            matches = self.valtime_matcher.match_pairwise(features)
+            relpose = self.pose_quality_metric(images, matches)
+            matched_pairs: MatchedPairs = matches[batch_id, 0]
+
+            inlier_match_indices = relpose[batch_id, 0]["inlier_mask"]
+            if len(inlier_match_indices) > 0:
+                inliers_list_ours = torch.cat([matched_pairs.kps1[matched_pairs.matches[0, inlier_match_indices]],
+                                               matched_pairs.kps2[matched_pairs.matches[1, inlier_match_indices]]],
+                                              dim=-1)
+                im_inliers = vis_inliers([inliers_list_ours], im_batch, batch_i=batch_id, norm_color=False)
+                logger.log_image(key='training_matching/best_inliers', images=[im_inliers], step=self.global_step)
+            else:
+                print("No inliers")
+
             # if training_step_ok:
             #     try:
             #         im_rewards, rew_kp0, rew_kp1 = debug_reward_matches_log(batch, probs_grad, batch_i=batch_id)
