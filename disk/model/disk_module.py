@@ -431,7 +431,7 @@ class DiskModule(L.LightningModule):
         leaves = []
         grads = []
         for feat, detached_feat, is_success in zip(features.flat, detached_features.flat, success.flat):
-            if not is_success:
+            if not is_success or detached_feat.desc.grad is None:
                 continue
             leaves.extend(feat.grad_tensors())
             grads.extend([t.grad for t in detached_feat.grad_tensors()])
