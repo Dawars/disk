@@ -14,6 +14,7 @@ import os
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torchvision.transforms import functional as TF
 
 import mast3r.utils.path_to_dust3r  # noqa
 from dust3r.model import load_model
@@ -202,6 +203,11 @@ class DUSt3R(CroCoNet):
         """
         Ignore shape param for now
         """
+        # normalize for dust3r backbone
+        imagenet_mean = [0.485, 0.456, 0.406]
+        imagenet_std = [0.229, 0.224, 0.225]
+        img1 = TF.normalize(img1, imagenet_mean, imagenet_std, False)
+
         # encode the two images --> B,S,D
         B = img1.shape[0]
         shape1 = torch.tensor(img1.shape[-2:])[None].repeat(B, 1)
