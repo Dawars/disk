@@ -108,10 +108,10 @@ class DiskModule(L.LightningModule):
         )
         self.lm_kp = -0.001 * ramp
 
-    def on_train_epoch_start(self):
-        # reset optimizer during epochs just in case
-        optim = self.optimizers()
-        optim.zero_grad()
+    # def on_train_epoch_start(self):
+    #     # reset optimizer during epochs just in case
+    #     optim = self.optimizers()
+    #     optim.zero_grad()
 
     @dimchecked
     def forward(
